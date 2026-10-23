@@ -184,11 +184,26 @@ The result is written to `record_outcome (snapshot_id, account_key, party_key, o
 
 ## 7. Formatter
 
-- **Input:** a validated snapshot plus a `BureauProfile`. It reads only records whose `record_outcome` is accepted, with field and segment drops applied.
-- **Output:** the UCRF file. Segment order PN, ID, PT, EC, PA, TL, TH, ES; caps ID 8, PT 10, EC 10, PA 5; sequential tags; TLV / fixed-width encoding; padding; trailing signs; DDMMYYYY dates; spec reshaping (26-char name fields and 40-char address lines without splitting words, DPD capped at 900, ROI truncated to 3 dp).
-- **Bureau stamping:** member ID, header segment tag and file name come from the bureau profile only.
-- **Byte-identical duplicate records** are counted and reported (spec §1.4).
-- **Golden tests:** fixed snapshot → expected file bytes. Verify the encoding (spec §14 #16) against a real CIC sample file.
+The file format is **data, not code**. A layout YAML describes it, and a generic TUDF engine renders it:
+
+| Part | Where | What it holds |
+|---|---|---|
+| Layout | `submissions/formats/ucrf_consumer/ucrf_consumer_3_74.yaml` | The whole format: encoding (tag style, record separator, record end, trailer), the 146-byte header, the segments in order with their sequence labels, repeat caps and sort order, and every field (tag, source, format, max length, cap, default, conditions) |
+| Engine | `submissions/formats/tudf/` | Generic: `layout.py` loads and checks the YAML; `engine.py` renders; `snapshot.py` reads accepted records and validation drops; `parser.py` reads a file back |
+| Formatters | `submissions/formats/tudf/formatters.py` | The named algorithms a layout applies: dates, amounts, signed amounts, rate, lookup maps; word fitting for names and address lines; the phone list, ID number and PIN rules |
+
+**How it works:**
+- **Input:** a validated snapshot plus a `BureauProfile`. Only records whose `record_outcome` is accepted are written, with REJECT_FIELD and REJECT_SEGMENT drops applied (history rows are written as loaded).
+- **Output:** the header, then one record per account × holder (the layout's segments, then the record end), then the trailer. Repeating segments are numbered in the order written; an instance with no value for a `required` field is left out.
+- **Bureau stamping:** member ID, header segment tag and file name come only from the bureau profile.
+- **Byte-identical duplicate records** are counted and left out (spec §1.4).
+
+**To change the format** (for example a new field, a length, or a cap):
+1. Edit the layout YAML. It is checked when it loads: unknown keys, formats or sources, bad tags, or a header that doesn't add up to its length all fail immediately.
+2. Run the tests. `tests/test_ucrf_golden.py` compares the generated files byte for byte with `tests/golden/`.
+3. If the change is intended, review the difference, then regenerate the golden files (`REGENERATE_GOLDEN=1`).
+
+A new algorithm is a new named formatter, which any layout can then use. Commercial and NeSL are not TUDF; they will get their own engines.
 
 ## 8. Onboarding an NBFC
 
@@ -207,7 +222,8 @@ submissions/
   adapters/                     # mapping loader (base + override), compiler, lookups, extract runner, check-mapping
   snapshot/                     # snapshot lifecycle, retention
   validation/                   # rule catalogue, SQL runner, python rules, ucrf pack, cascade, policy, summary
-  formats/ucrf_consumer/        # segment builders, encoder, file writer
+  formats/tudf/                 # generic TUDF engine: layout loader, formatters, renderer, parser
+  formats/ucrf_consumer/        # ucrf_consumer_3_74.yaml (the consumer file layout)
 clients/
   _base/mapping.yaml            # standard LMS schema mapping
   <tenant>/mapping.yaml, generated/*.sql

@@ -7,10 +7,12 @@ import pytest
 from submissions.adapters.extract import run_extract
 from submissions.adapters.mapping import load_mapping
 from submissions.bureaus.seed import seed as seed_bureaus
-from submissions.formats.ucrf_consumer.encoding import (
-    EncodingError, FormatOptions, amount, fit_words, fixed, parse_records, printable, rate, signed_amount, tlv,
+from submissions.formats.tudf.encoding import (
+    EncodingError, amount, fit_words, fixed, printable, rate, signed_amount, tlv,
 )
-from submissions.formats.ucrf_consumer.writer import HEADER_LENGTH, build_file, header
+from submissions.formats.ucrf_consumer import FormatOptions, build_file, header, header_length, parse_records
+
+HEADER_LENGTH = header_length()
 from submissions.snapshot import SnapshotRepository
 from submissions.validation.engine import validate_snapshot
 from submissions.validation.rules import load_rule_set

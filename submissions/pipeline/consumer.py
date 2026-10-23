@@ -9,7 +9,7 @@ from submissions.adapters.extract import run_extract
 from submissions.adjustments.summary import adjustments_csv
 from submissions.adapters.mapping import load_mapping
 from submissions.bureaus import BureauProfile
-from submissions.formats.ucrf_consumer.writer import build_file
+from submissions.formats.ucrf_consumer import build_file
 from submissions.pipeline.base import Services
 from submissions.requests import RequestResult, SubmissionRequest
 from submissions.snapshot import Snapshot

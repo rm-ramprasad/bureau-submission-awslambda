@@ -25,6 +25,7 @@ include = ["submissions*"]
 [tool.setuptools.package-data]
 "submissions.canonical" = ["*.yaml"]
 "submissions.validation" = ["packs/*.yaml"]
+"submissions.formats.ucrf_consumer" = ["*.yaml"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
