@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Submission tracker · Bureau Submissions</title>
+  <link rel="stylesheet" href="app.css">
+  <script defer src="config.js"></script>
+  <script defer src="vendor/oidc-client-ts.min.js"></script>
+  <script defer src="js/core.js"></script>
+  <script defer src="js/tracker.js"></script>
+  <script defer src="vendor/alpine.min.js"></script>
+</head>
+<body data-nav="tracker" data-crumb="Submission tracker">
+<main class="content" x-data="tracker" @tenant-changed.window="load()">
+  <div class="page-head">
+    <div>
+      <h1>Submission tracker<span x-show="view === 'requests' && stageLabel()" x-text="' · ' + stageLabel()"></span></h1>
+      <p class="subtitle" x-show="view === 'runs'">Validation runs and generated files
+        <span x-text="$store.app.tenant ? 'for ' + $store.app.tenant : 'across all NBFCs'"></span>.</p>
+      <p class="subtitle" x-show="view === 'requests'">Each request is one validation and the files generated from it
+        · <span x-text="$store.app.tenant || 'all NBFCs'"></span>.</p>
+    </div>
+    <div class="segmented">
+      <a href="#" :class="view === 'runs' && 'on'" @click.prevent="showRuns()">All runs</a>
+      <a href="#" :class="view === 'requests' && 'on'" @click.prevent="showRequests()">Requests by stage</a>
+    </div>
+  </div>
+
+  <!-- ===================== runs -->
+  <template x-if="view === 'runs'">
+    <div>
+      <form class="panel row scope" @submit.prevent="page = 1; load()">
+        <div><label for="status">Status</label>
+          <select id="status" x-model="flt.status"><option value="">All</option>
+            <template x-for="s in $store.app.meta?.statuses || []" :key="s.value">
+              <option :value="s.value" x-text="F.title(s.value)" :selected="s.value === flt.status"></option></template></select></div>
+        <div><label for="mode">Mode</label>
+          <select id="mode" x-model="flt.mode"><option value="">All</option>
+            <option value="VALIDATE">Validate</option><option value="GENERATE">Generate files</option></select></div>
+        <div><label for="bureau">Bureau</label>
+          <select id="bureau" x-model="flt.bureau"><option value="">All</option>
+            <template x-for="b in $store.app.meta?.bureaus || []" :key="b.value">
+              <option :value="b.value" x-text="F.title(b.value)" :selected="b.value === flt.bureau"></option></template></select></div>
+        <div><label for="from">Requested from</label><input type="date" id="from" x-model="flt.from"></div>
+        <div><label for="to">to</label><input type="date" id="to" x-model="flt.to"></div>
+        <div><button type="submit" class="secondary">Filter</button>
+          <a href="#" x-show="filtered()" @click.prevent="flt = { status: '', mode: '', bureau: '', from: '', to: '' }; page = 1; load()">Clear</a></div>
+      </form>
+
+      <div class="panel flush">
+        <div class="panel-head"><h2 x-text="(runs?.total ?? '…') + ' run(s)'"></h2>
+          <span class="muted" x-show="runs?.pages > 1" x-text="`page ${runs?.page} of ${runs?.pages}`"></span></div>
+        <div class="table-wrap" x-show="runs?.batches.length"><table>
+          <thead><tr><th>Requested</th><th>Request</th><th>NBFC</th><th>As of</th><th>Mode</th><th>Types</th><th>Bureaus</th><th>Status</th><th>By</th></tr></thead>
+          <tbody>
+            <template x-for="b in runs?.batches || []" :key="b.batch_id">
+              <tr><td x-text="F.dt(b.requested_at)"></td>
+                <td class="mono"><a :href="'batch.html?id=' + b.batch_id" x-text="b.batch_id"></a></td>
+                <td x-text="b.tenant_id"></td><td x-text="F.d(b.as_of_date)"></td>
+                <td x-text="b.run_mode === 'VALIDATE' ? 'Validate' : 'Generate files'"></td>
+                <td x-text="b.submission_types.map(F.title).join(', ')"></td>
+                <td x-text="b.bureau_codes.join(', ') || '—'"></td>
+                <td><span class="badge" :class="'b-' + b.status" x-text="F.title(b.status)"></span></td>
+                <td class="muted" x-text="b.requested_by || ''"></td></tr>
+            </template>
+          </tbody>
+        </table></div>
+        <div class="panel-body muted" x-show="runs && !runs.batches.length">
+          <span x-show="filtered()">No runs match these filters.</span>
+          <span x-show="!filtered()">No runs yet. <a href="new.html">Create a request</a>.</span></div>
+      </div>
+      <div class="pager" x-show="runs?.pages > 1">
+        <a href="#" x-show="page > 1" @click.prevent="page--; load()">Previous</a>
+        <span class="muted" x-text="`Page ${page} of ${runs?.pages}`"></span>
+        <a href="#" x-show="page < runs?.pages" @click.prevent="page++; load()">Next</a>
+      </div>
+    </div>
+  </template>
+
+  <!-- ===================== requests by stage -->
+  <template x-if="view === 'requests'">
+    <div>
+      <form class="panel row scope" @submit.prevent="load()">
+        <div><label for="stage">Stage</label>
+          <select id="stage" x-model="stage"><option value="">All stages</option>
+            <template x-for="s in $store.app.meta?.stages || []" :key="s.value">
+              <option :value="s.value" x-text="s.label" :selected="s.value === stage"></option></template></select></div>
+        <div><label for="period">Period</label>
+          <select id="period" x-model="period">
+            <template x-for="p in $store.app.meta?.periods || []" :key="p.value">
+              <option :value="p.value" x-text="p.label" :selected="p.value === period"></option></template></select></div>
+        <div><button type="submit" class="secondary">Apply</button></div>
+      </form>
+      <div class="panel flush">
+        <div class="table-wrap" x-show="requests?.length"><table>
+          <thead><tr><th>Request</th><th>NBFC</th><th>As of</th><th>Stage</th><th class="num">Records</th><th class="num">Accepted</th>
+            <th class="num">Excluded</th><th>Files</th><th>Requested</th></tr></thead>
+          <tbody>
+            <template x-for="r in requests || []" :key="r.batch_id">
+              <tr><td class="mono"><a :href="'batch.html?id=' + r.batch_id" x-text="r.batch_id"></a></td>
+                <td x-text="r.tenant_id"></td><td x-text="F.d(r.as_of_date)"></td>
+                <td><span class="badge" :class="'s-' + r.stage" x-text="r.stage_label"></span></td>
+                <td class="num" x-text="r.records ? F.num(r.records) : ''"></td>
+                <td class="num" x-text="r.accepted ? F.num(r.accepted) : ''"></td>
+                <td class="num" x-text="r.excluded || ''"></td>
+                <td x-text="r.files.join(', ') || '—'"></td>
+                <td x-text="F.dt(r.created_at) + ' · ' + (r.requested_by || '—')"></td></tr>
+            </template>
+          </tbody>
+        </table></div>
+        <div class="panel-body muted" x-show="requests && !requests.length">No requests match.</div>
+      </div>
+    </div>
+  </template>
+</main>
+</body>
+</html>

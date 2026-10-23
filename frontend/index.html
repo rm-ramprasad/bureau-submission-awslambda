@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard · Bureau Submissions</title>
+  <link rel="stylesheet" href="app.css">
+  <script defer src="config.js"></script>
+  <script defer src="vendor/oidc-client-ts.min.js"></script>
+  <script defer src="js/core.js"></script>
+  <script defer src="js/dashboard.js"></script>
+  <script defer src="vendor/alpine.min.js"></script>
+</head>
+<body data-nav="dashboard" data-crumb="Dashboard">
+<main class="content" x-data="dashboard" @tenant-changed.window="load()">
+  <div class="page-head">
+    <div>
+      <h1>Dashboard</h1>
+      <p class="subtitle">Requests <span x-text="$store.app.tenant ? 'for ' + $store.app.tenant : 'across all NBFCs'"></span>
+        · <span x-text="periodLabel().toLowerCase()"></span>. Each request is one validation and the files generated from it.</p>
+    </div>
+    <div class="segmented">
+      <template x-for="p in periods" :key="p.value">
+        <a href="#" :class="p.value === period && 'on'" @click.prevent="period = p.value; load()" x-text="p.label"></a>
+      </template>
+    </div>
+  </div>
+
+  <p class="loading" x-show="!board">Loading…</p>
+  <template x-if="board">
+    <div>
+      <div class="kpis">
+        <a class="kpi" :href="tracker()"><span class="label">Requests raised</span>
+          <span class="value" x-text="board.raised"></span><span class="hint" x-text="board.scheduled + ' scheduled'"></span></a>
+        <template x-for="st in board.stages" :key="st.value">
+          <a class="kpi" :class="'k-' + st.value" :href="tracker(st.value)"><span class="label" x-text="st.label"></span>
+            <span class="value" x-text="st.count"></span><span class="hint" x-text="stageHint(st)"></span></a>
+        </template>
+      </div>
+
+      <div class="kpis small">
+        <div class="kpi"><span class="label">Records validated</span><span class="value" x-text="F.num(board.records)"></span>
+          <span class="hint" x-text="F.pct(board.acceptance_rate) + ' accepted'"></span></div>
+        <div class="kpi"><span class="label">Loans excluded</span><span class="value" x-text="F.num(board.excluded)"></span>
+          <span class="hint">by user exceptions</span></div>
+        <div class="kpi"><span class="label">Loans overridden</span><span class="value" x-text="F.num(board.overridden)"></span>
+          <span class="hint">OD days / balance / amounts</span></div>
+        <div class="kpi"><span class="label">Files generated</span><span class="value" x-text="F.num(board.files_generated)"></span>
+          <span class="hint" x-text="F.num(board.records_submitted) + ' records submitted'"></span></div>
+      </div>
+
+      <div class="grid two">
+        <div class="panel flush">
+          <div class="panel-head"><h2>Needs attention</h2>
+            <span class="muted" x-text="board.attention.length + (queueSlow() ? 1 : 0)"></span></div>
+          <ul class="attention" x-show="board.attention.length || queueSlow()">
+            <li class="bad" x-show="queueSlow()"><strong>Runs are waiting.</strong> The oldest submitted request has waited
+              <span x-text="F.age($store.app.health?.waiting_seconds)"></span>. Recovery re-starts it within 15 minutes;
+              check the worker alarms if it persists.</li>
+            <template x-for="a in board.attention" :key="a.batch_id">
+              <li :class="a.stage === 'FAILED' ? 'bad' : 'warn'">
+                <a class="mono" :href="'batch.html?id=' + a.batch_id" x-text="a.batch_id"></a>
+                · <span x-text="a.tenant_id"></span> · <span x-text="F.d(a.as_of_date)"></span><div x-text="a.reason"></div></li>
+            </template>
+          </ul>
+          <div class="panel-body muted" x-show="!board.attention.length && !queueSlow()">Nothing needs attention.</div>
+        </div>
+
+        <div class="panel flush">
+          <div class="panel-head"><h2>Bureaus</h2><span class="muted">files in the period</span></div>
+          <div class="panel-body" x-show="board.bureaus.length">
+            <template x-for="b in board.bureaus" :key="b.bureau">
+              <div class="meter-row"><div class="meter-label"><strong x-text="F.title(b.bureau)"></strong>
+                <span class="muted" x-text="`${b.files} file(s) · ${F.num(b.records)} records · last ${F.dt(b.last)}`"></span></div>
+                <div class="meter"><span :style="`width: ${b.share}%`"></span></div></div>
+            </template>
+          </div>
+          <div class="panel-body muted" x-show="!board.bureaus.length">No files generated in this period.</div>
+        </div>
+      </div>
+
+      <div class="panel flush" x-show="board.nbfc_status">
+        <div class="panel-head"><h2>NBFC status</h2><span class="muted">latest request of each active NBFC</span></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>NBFC</th><th>Latest request</th><th>As of</th><th>Stage</th><th class="num">Records</th><th>Files</th><th>Last activity</th></tr></thead>
+          <tbody>
+            <template x-for="n in board.nbfc_status || []" :key="n.tenant_id">
+              <tr><td x-text="n.display_name"></td>
+                <template x-if="n.latest">
+                  <td class="mono"><a :href="'batch.html?id=' + n.latest.batch_id" x-text="n.latest.batch_id"></a></td></template>
+                <template x-if="n.latest"><td x-text="F.d(n.latest.as_of_date)"></td></template>
+                <template x-if="n.latest"><td><span class="badge" :class="'s-' + n.latest.stage" x-text="n.latest.stage_label"></span></td></template>
+                <template x-if="n.latest"><td class="num" x-text="n.latest.records ? F.num(n.latest.records) : ''"></td></template>
+                <template x-if="n.latest"><td x-text="n.latest.files.join(', ') || '—'"></td></template>
+                <template x-if="n.latest"><td x-text="F.dt(n.latest.last_activity)"></td></template>
+                <template x-if="!n.latest"><td colspan="6" class="muted">No requests yet</td></template>
+              </tr>
+            </template>
+          </tbody>
+        </table></div>
+      </div>
+
+      <div class="panel flush">
+        <div class="panel-head"><h2>Recent requests</h2><a :href="tracker()">All in the tracker</a></div>
+        <div class="table-wrap" x-show="board.recent.length"><table>
+          <thead><tr><th>Request</th><th>NBFC</th><th>As of</th><th>Stage</th><th class="num">Records</th><th class="num">Excluded</th><th>Files</th><th>Requested</th></tr></thead>
+          <tbody>
+            <template x-for="r in board.recent" :key="r.batch_id">
+              <tr><td class="mono"><a :href="'batch.html?id=' + r.batch_id" x-text="r.batch_id"></a></td>
+                <td x-text="r.tenant_id"></td><td x-text="F.d(r.as_of_date)"></td>
+                <td><span class="badge" :class="'s-' + r.stage" x-text="r.stage_label"></span></td>
+                <td class="num" x-text="r.records ? F.num(r.records) : ''"></td><td class="num" x-text="r.excluded || ''"></td>
+                <td x-text="r.files.join(', ') || '—'"></td>
+                <td x-text="F.dt(r.created_at) + ' · ' + (r.requested_by || '—')"></td></tr>
+            </template>
+          </tbody>
+        </table></div>
+        <div class="panel-body muted" x-show="!board.recent.length">No requests in this period. <a href="new.html">Create one</a>.</div>
+      </div>
+    </div>
+  </template>
+</main>
+</body>
+</html>

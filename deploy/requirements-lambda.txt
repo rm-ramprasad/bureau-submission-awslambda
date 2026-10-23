@@ -1,0 +1,14 @@
+# Lambda package dependencies (exact versions, tested together on Python 3.14).
+# boto3 / botocore are not listed: the Lambda python3.14 runtime provides them.
+apig-wsgi==2.20.0
+blinker==1.9.0
+click==8.5.0
+Flask==3.1.3
+itsdangerous==2.2.0
+Jinja2==3.1.6
+MarkupSafe==3.0.4
+PyMySQL==1.2.3
+PyYAML==6.0.3
+SQLAlchemy==2.1.5
+typing_extensions==4.16.0
+Werkzeug==3.1.9

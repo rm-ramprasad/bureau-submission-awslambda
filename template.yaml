@@ -1,0 +1,508 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Bureau submissions, serverless: static frontend (S3 + CloudFront), Cognito sign-in, HTTP API + Lambda (JSON API),
+  validate / generate worker Lambdas started by S3 job objects, scheduled jobs. Uses the existing RDS MySQL and files
+  bucket in the existing VPC (no NAT, no interface endpoints). See SERVERLESS_PLAN.md and RUNBOOK.md.
+
+Parameters:
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Existing subnets of the RDS VPC for the Lambdas (two availability zones)
+  LambdaSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: >
+      Existing security group for the Lambdas (created in the console, RUNBOOK "Network"). The RDS security group
+      allows 3306 from it, and the VPC has an S3 gateway endpoint; the stack creates no network resources.
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: mysql+pymysql://user:password@host:3306/db (read from SSM Parameter Store by deploy/deploy.ps1)
+  FilesBucket:
+    Type: String
+    Default: opta-s3-demo
+    Description: Existing bucket for generated bureau files
+  FilesPrefix:
+    Type: String
+    Default: bureau-submissions
+  AdminEmail:
+    Type: String
+    Description: First user (invited by Cognito) and recipient of the alarm e-mails
+  CognitoDomainPrefix:
+    Type: String
+    Description: Prefix of the Cognito sign-in domain (<prefix>.auth.<region>.amazoncognito.com), globally unique
+  RetentionDays:
+    Type: Number
+    Default: 90
+    Description: Snapshot and file retention (PII)
+
+Globals:
+  Function:
+    Runtime: python3.14
+    Architectures: [x86_64]
+
+    MemorySize: 1024
+    Timeout: 60
+    VpcConfig:
+      SubnetIds: !Ref SubnetIds
+      SecurityGroupIds: [!Ref LambdaSecurityGroupId]
+    Environment:
+      Variables:
+        SUBMISSIONS_DATABASE_URL: !Ref DatabaseUrl
+        SUBMISSIONS_STORAGE: s3
+        SUBMISSIONS_S3_BUCKET: !Ref FilesBucket
+        SUBMISSIONS_S3_PREFIX: !Ref FilesPrefix
+        SUBMISSIONS_S3_REGION: !Ref AWS::Region
+        SUBMISSIONS_JOBS_BUCKET: !Sub ${AWS::StackName}-jobs-${AWS::AccountId}   # by name: the bucket triggers the workers
+        SUBMISSIONS_AUTH: cognito
+        SUBMISSIONS_COGNITO_CLIENT_ID: !Ref UserPoolClient
+        SUBMISSIONS_LOG_LEVEL: INFO
+
+Resources:
+  # ------------------------------------------------------------------ sign-in (Cognito, users created by an admin)
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${AWS::StackName}-users
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true                # no self sign-up
+        InviteMessageTemplate:
+          EmailSubject: Your Bureau Submissions account
+          EmailMessage: "You have been given access to Bureau Submissions. Sign in with {username} and the temporary password {####}; you will be asked to choose your own password."
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          TemporaryPasswordValidityDays: 7
+      MfaConfiguration: "OPTIONAL"
+      EnabledMfas: [SOFTWARE_TOKEN_MFA]                # authenticator app
+      AccountRecoverySetting:
+        RecoveryMechanisms: [{ Name: verified_email, Priority: 1 }]
+      UserPoolTier: ESSENTIALS
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      Domain: !Ref CognitoDomainPrefix
+      ManagedLoginVersion: 2
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: bureau-submissions-web
+      GenerateSecret: false                           # browser app: public client, PKCE
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email, profile]
+      SupportedIdentityProviders: [COGNITO]           # a company identity provider can be added later
+      CallbackURLs: [!Sub "https://${Distribution.DomainName}/callback.html"]
+      LogoutURLs: [!Sub "https://${Distribution.DomainName}/signed-out.html"]
+      ExplicitAuthFlows: [ALLOW_REFRESH_TOKEN_AUTH]
+      IdTokenValidity: 60
+      AccessTokenValidity: 60
+      RefreshTokenValidity: 60
+      TokenValidityUnits: { IdToken: minutes, AccessToken: minutes, RefreshToken: minutes }
+      EnableTokenRevocation: true
+      PreventUserExistenceErrors: ENABLED
+
+  ManagedLoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref UserPoolClient
+      UseCognitoProvidedValues: true
+
+  AdminUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      UserPoolId: !Ref UserPool
+      Username: !Ref AdminEmail
+      DesiredDeliveryMediums: [EMAIL]
+      UserAttributes:
+        - { Name: email, Value: !Ref AdminEmail }
+        - { Name: email_verified, Value: "true" }
+
+  # ------------------------------------------------------------------ API (HTTP API + JWT authorizer on every route)
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}-api
+      ProtocolType: HTTP
+
+  JwtAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      Name: cognito
+      AuthorizerType: JWT
+      IdentitySource: [$request.header.Authorization]
+      JwtConfiguration:
+        Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
+        Audience: [!Ref UserPoolClient]
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ApiFunction.Arn
+      PayloadFormatVersion: "2.0"
+      TimeoutInMillis: 29000
+
+  ApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: $default                              # everything: /api/... only reaches it through CloudFront
+      Target: !Sub integrations/${ApiIntegration}
+      AuthorizationType: JWT
+      AuthorizerId: !Ref JwtAuthorizer
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 20
+        ThrottlingBurstLimit: 40
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogs.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","time":"$context.requestTime","method":"$context.httpMethod","path":"$context.path","status":"$context.status","latency":"$context.responseLatency","authError":"$context.authorizer.error","user":"$context.authorizer.claims.email"}'
+
+  ApiAccessLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/${AWS::StackName}
+      RetentionInDays: 30
+
+  ApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*
+
+  # ------------------------------------------------------------------ frontend (private bucket behind CloudFront)
+  UiBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 } }]
+      PublicAccessBlockConfiguration:
+        { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true }
+      OwnershipControls: { Rules: [{ ObjectOwnership: BucketOwnerEnforced }] }
+
+  UiBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref UiBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub ${UiBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+          - Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource: [!GetAtt UiBucket.Arn, !Sub "${UiBucket.Arn}/*"]
+            Condition: { Bool: { aws:SecureTransport: "false" } }
+
+  UiOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${AWS::StackName}-ui
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  SecurityHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub ${AWS::StackName}-security-headers
+        SecurityHeadersConfig:
+          StrictTransportSecurity: { AccessControlMaxAgeSec: 31536000, IncludeSubdomains: true, Override: true }
+          ContentTypeOptions: { Override: true }
+          FrameOptions: { FrameOption: DENY, Override: true }
+          ReferrerPolicy: { ReferrerPolicy: same-origin, Override: true }
+          ContentSecurityPolicy:
+            Override: true
+            # Alpine.js evaluates its attribute expressions, hence 'unsafe-eval'; scripts load only from this site.
+            ContentSecurityPolicy: !Sub "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://cognito-idp.${AWS::Region}.amazonaws.com https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Bureau submissions
+        HttpVersion: http2and3
+        PriceClass: PriceClass_200                    # includes India edge locations
+        DefaultRootObject: index.html
+        Origins:
+          - Id: ui
+            DomainName: !GetAtt UiBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt UiOriginAccessControl.Id
+            S3OriginConfig: { OriginAccessIdentity: "" }
+          - Id: api
+            DomainName: !Sub ${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+            CustomOriginConfig: { OriginProtocolPolicy: https-only, OriginSSLProtocols: [TLSv1.2] }
+        DefaultCacheBehavior:
+          TargetOriginId: ui
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6          # Managed-CachingOptimized
+          ResponseHeadersPolicyId: !Ref SecurityHeaders
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad        # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
+            ResponseHeadersPolicyId: !Ref SecurityHeaders
+        ViewerCertificate: { CloudFrontDefaultCertificate: true }
+
+  # ------------------------------------------------------------------ jobs bucket: job objects start the workers
+  JobsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${AWS::StackName}-jobs-${AWS::AccountId}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 } }]
+      PublicAccessBlockConfiguration:
+        { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true }
+      OwnershipControls: { Rules: [{ ObjectOwnership: BucketOwnerEnforced }] }
+      LifecycleConfiguration:
+        Rules:
+          - { Id: jobs, Status: Enabled, Prefix: jobs/, ExpirationInDays: 7 }
+          - { Id: exports, Status: Enabled, Prefix: exports/, ExpirationInDays: 1 }
+
+  WorkerDeadLetters:
+    Type: AWS::SQS::Queue
+    Properties:
+      SqsManagedSseEnabled: true
+      MessageRetentionPeriod: 1209600                 # 14 days
+
+  # ------------------------------------------------------------------ functions
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Bureau submissions JSON API (behind API Gateway + CloudFront)
+      CodeUri: build/lambda
+      Handler: submissions.lambda_handlers.api
+      Timeout: 29
+      Policies:
+        - Statement:
+            - Effect: Allow                           # presigned downloads of generated files
+              Action: s3:GetObject
+              Resource: !Sub arn:aws:s3:::${FilesBucket}/${FilesPrefix}/*
+            - Effect: Allow                           # dispatch jobs, write and hand out CSV exports
+              Action: [s3:PutObject, s3:GetObject]
+              Resource:
+                - !Sub arn:aws:s3:::${AWS::StackName}-jobs-${AWS::AccountId}/jobs/*
+                - !Sub arn:aws:s3:::${AWS::StackName}-jobs-${AWS::AccountId}/exports/*
+
+  ValidateWorker:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Runs one VALIDATE request (extract -> snapshot -> validation)
+      CodeUri: build/lambda
+      Handler: submissions.lambda_handlers.worker
+      Timeout: 900
+      MemorySize: 2048
+      EventInvokeConfig:
+        MaximumRetryAttempts: 2
+        MaximumEventAgeInSeconds: 3600
+        DestinationConfig:
+          OnFailure: { Type: SQS, Destination: !GetAtt WorkerDeadLetters.Arn }
+      Policies:
+        - SQSSendMessagePolicy: { QueueName: !GetAtt WorkerDeadLetters.QueueName }
+      Events:
+        Job:
+          Type: S3
+          Properties:
+            Bucket: !Ref JobsBucket
+            Events: s3:ObjectCreated:*
+            Filter: { S3Key: { Rules: [{ Name: prefix, Value: jobs/validate/ }] } }
+
+  GenerateWorker:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Runs one GENERATE request (format one bureau file from a validated snapshot, write it to S3)
+      CodeUri: build/lambda
+      Handler: submissions.lambda_handlers.worker
+      Timeout: 300
+      MemorySize: 1024
+      EventInvokeConfig:
+        MaximumRetryAttempts: 2
+        MaximumEventAgeInSeconds: 3600
+        DestinationConfig:
+          OnFailure: { Type: SQS, Destination: !GetAtt WorkerDeadLetters.Arn }
+      Policies:
+        - SQSSendMessagePolicy: { QueueName: !GetAtt WorkerDeadLetters.QueueName }
+        - Statement:
+            - Effect: Allow
+              Action: [s3:PutObject, s3:GetObject]
+              Resource: !Sub arn:aws:s3:::${FilesBucket}/${FilesPrefix}/*
+      Events:
+        Job:
+          Type: S3
+          Properties:
+            Bucket: !Ref JobsBucket
+            Events: s3:ObjectCreated:*
+            Filter: { S3Key: { Rules: [{ Name: prefix, Value: jobs/generate/ }] } }
+
+  JobsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description: Scheduled and admin jobs (schedule, recovery, retention, migrate, users)
+      CodeUri: build/lambda
+      Handler: submissions.lambda_handlers.jobs
+      Timeout: 900
+      Policies:
+        - Statement:
+            - Effect: Allow                           # retention deletes old files
+              Action: [s3:GetObject, s3:DeleteObject]
+              Resource: !Sub arn:aws:s3:::${FilesBucket}/${FilesPrefix}/*
+            - Effect: Allow                           # dispatch scheduled runs and re-dispatch lost ones
+              Action: s3:PutObject
+              Resource: !Sub arn:aws:s3:::${AWS::StackName}-jobs-${AWS::AccountId}/jobs/*
+      Events:
+        Recovery:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: rate(15 minutes)
+            Input: '{"job": "recovery"}'
+            RetryPolicy: { MaximumRetryAttempts: 0 }
+        Retention:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 2 * * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: !Sub '{"job": "retention", "days": ${RetentionDays}}'
+        MonthEnd:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 6 2 * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: '{"job": "schedule", "cycle": "ME"}'
+        Weekly1:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 6 10 * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: '{"job": "schedule", "cycle": "W1"}'
+        Weekly2:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 6 17 * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: '{"job": "schedule", "cycle": "W2"}'
+        Weekly3:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 6 24 * ? *)
+            ScheduleExpressionTimezone: Asia/Kolkata
+            Input: '{"job": "schedule", "cycle": "W3"}'
+
+  ApiLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub "/aws/lambda/${ApiFunction}", RetentionInDays: 30 }
+  ValidateLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub "/aws/lambda/${ValidateWorker}", RetentionInDays: 30 }
+  GenerateLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub "/aws/lambda/${GenerateWorker}", RetentionInDays: 30 }
+  JobsLogs:
+    Type: AWS::Logs::LogGroup
+    Properties: { LogGroupName: !Sub "/aws/lambda/${JobsFunction}", RetentionInDays: 30 }
+
+  # ------------------------------------------------------------------ alarms (e-mail)
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      KmsMasterKeyId: alias/aws/sns
+      Subscription: [{ Protocol: email, Endpoint: !Ref AdminEmail }]
+
+  DeadLetterAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: A worker run failed after its retries (see the dead-letter queue and the worker logs)
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions: [{ Name: QueueName, Value: !GetAtt WorkerDeadLetters.QueueName }]
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  ApiErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: The API Lambda is failing
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{ Name: FunctionName, Value: !Ref ApiFunction }]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+  JobsErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: A scheduled job (schedule, recovery, retention) failed
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{ Name: FunctionName, Value: !Ref JobsFunction }]
+      Statistic: Sum
+      Period: 900
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref AlarmTopic]
+
+Outputs:
+  AppUrl:
+    Value: !Sub https://${Distribution.DomainName}
+  DistributionId:
+    Value: !Ref Distribution
+  UiBucketName:
+    Value: !Ref UiBucket
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+  CognitoDomain:
+    Value: !Sub https://${CognitoDomainPrefix}.auth.${AWS::Region}.amazoncognito.com
+  JobsFunctionName:
+    Value: !Ref JobsFunction
+  JobsBucketName:
+    Value: !Ref JobsBucket
+  WorkerDeadLetterQueue:
+    Value: !Ref WorkerDeadLetters

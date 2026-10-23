@@ -1,0 +1,12 @@
+{
+  "SubnetIds": ["subnet-085829c8efdda82d2", "subnet-03d60377cf847353d"],
+  "LambdaSecurityGroupId": "sg-011b04f5bf9fd3826",
+  "FilesBucket": "opta-s3-demo",
+  "FilesPrefix": "bureau-submissions",
+  "ArtifactBucket": "opta-s3-demo",
+  "ArtifactPrefix": "deploy/lambda",
+  "DatabaseUrlParameter": "/bureau-submissions/database-url",
+  "AdminEmail": "ramprasad@openterrace.in",
+  "AdminName": "Ram Prasad",
+  "CognitoDomainPrefix": "bureau-submissions-openterrace"
+}

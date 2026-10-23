@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>New request · Bureau Submissions</title>
+  <link rel="stylesheet" href="app.css">
+  <script defer src="config.js"></script>
+  <script defer src="vendor/oidc-client-ts.min.js"></script>
+  <script defer src="js/core.js"></script>
+  <script defer src="js/new.js"></script>
+  <script defer src="vendor/alpine.min.js"></script>
+</head>
+<body data-nav="new" data-crumb="New request">
+<main class="content" x-data="newRequest">
+  <div class="page-head">
+    <div>
+      <h1>New request</h1>
+      <p class="subtitle">1. Create the request · 2. Add exceptions (exclusions, overrides) · 3. Submit for validation ·
+        4. Generate the bureau files from the validated request.</p>
+    </div>
+  </div>
+  <p class="loading" x-show="!$store.app.meta">Loading…</p>
+  <form class="panel" x-show="$store.app.meta" x-cloak @submit.prevent="create()">
+    <div class="row">
+      <div>
+        <label for="tenant_id">NBFC</label>
+        <select id="tenant_id" x-model="form.tenant_id" required>
+          <option value="">Select…</option>
+          <template x-for="t in ($store.app.meta?.tenants || []).filter((t) => t.is_active)" :key="t.tenant_id">
+            <option :value="t.tenant_id" x-text="`${t.display_name} (${t.tenant_id})`" :selected="t.tenant_id === form.tenant_id"></option>
+          </template>
+        </select>
+      </div>
+      <div>
+        <label for="as_of_date">As-of date</label>
+        <input type="date" id="as_of_date" x-model="form.as_of_date" required>
+      </div>
+      <div>
+        <label for="reporting_cycle">Reporting cycle</label>
+        <select id="reporting_cycle" x-model="form.reporting_cycle">
+          <option value="">—</option>
+          <template x-for="c in $store.app.meta?.cycles || []" :key="c.value">
+            <option :value="c.value" x-text="c.value" :selected="c.value === form.reporting_cycle"></option>
+          </template>
+        </select>
+      </div>
+    </div>
+
+    <label>Submission types</label>
+    <div class="choices">
+      <template x-for="t in $store.app.meta?.submission_types || []" :key="t.value">
+        <label :class="!t.enabled && 'disabled'">
+          <input type="checkbox" :value="t.value" x-model="form.submission_types" :disabled="!t.enabled">
+          <span x-text="t.label + (t.enabled ? '' : ' (coming later)')"></span>
+        </label>
+      </template>
+    </div>
+
+    <p style="margin-top:20px"><button type="submit" :disabled="busy">Create request</button></p>
+  </form>
+</main>
+</body>
+</html>

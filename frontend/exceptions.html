@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Exceptions · Bureau Submissions</title>
+  <link rel="stylesheet" href="app.css">
+  <script defer src="config.js"></script>
+  <script defer src="vendor/oidc-client-ts.min.js"></script>
+  <script defer src="js/core.js"></script>
+  <script defer src="js/exceptions.js"></script>
+  <script defer src="vendor/alpine.min.js"></script>
+</head>
+<body data-nav="exceptions" data-crumb="Exceptions">
+<main class="content" x-data="exceptionsPage" @tenant-changed.window="batchId || load()">
+
+  <!-- ===================== list: requests waiting for their exceptions -->
+  <template x-if="!batchId">
+    <div>
+      <div class="page-head">
+        <div>
+          <h1>Exceptions</h1>
+          <p class="subtitle">Requests waiting for their exceptions. Exclusions and overrides belong to a request: create a
+            request, add them, then submit it for validation.</p>
+        </div>
+        <a class="button" href="new.html">New request</a>
+      </div>
+      <div class="panel flush">
+        <p class="loading panel-body" x-show="!drafts">Loading…</p>
+        <div class="table-wrap" x-show="drafts && drafts.length"><table>
+          <thead><tr><th>Request</th><th>NBFC</th><th>As of</th><th>Types</th><th>Requested</th><th></th></tr></thead>
+          <tbody>
+            <template x-for="b in drafts || []" :key="b.batch_id">
+              <tr><td class="mono"><a :href="'exceptions.html?batch=' + b.batch_id" x-text="b.batch_id"></a></td>
+                <td x-text="b.tenant_id"></td><td x-text="F.d(b.as_of_date)"></td>
+                <td x-text="b.submission_types.map(F.title).join(', ')"></td>
+                <td x-text="F.dt(b.requested_at) + ' · ' + (b.requested_by || '—')"></td>
+                <td><a class="button small" :href="'exceptions.html?batch=' + b.batch_id">Add exceptions</a></td></tr>
+            </template>
+          </tbody>
+        </table></div>
+        <div class="panel-body muted" x-show="drafts && !drafts.length">
+          No requests are waiting for exceptions<span x-show="$store.app.tenant"> for this NBFC</span>.</div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ===================== one request's exceptions step -->
+  <template x-if="batchId">
+    <div>
+      <p class="loading" x-show="!page">Loading…</p>
+      <template x-if="page">
+        <div>
+          <div class="page-head">
+            <div>
+              <h1 x-text="'Exceptions · ' + page.tenant.display_name"></h1>
+              <p class="subtitle">Request <a class="mono" :href="'batch.html?id=' + batchId" x-text="batchId"></a>
+                · as of <span x-text="F.d(page.row.as_of_date)"></span> · <span x-text="F.title(page.row.submission_type)"></span>
+                · requested by <span x-text="page.row.requested_by || '—'"></span></p>
+            </div>
+          </div>
+
+          <ol class="steps">
+            <li class="done">Request</li>
+            <li :class="page.is_draft ? 'current' : 'done'">Exceptions</li>
+            <li :class="page.row.status === 'SUCCEEDED' ? 'done' : (page.is_draft ? '' : 'current')">Validation</li>
+            <li>Files</li>
+          </ol>
+
+          <p class="choices" x-show="page.rows.length > 1">
+            <template x-for="r in page.rows" :key="r.request_id">
+              <a class="button small" :class="r.request_id !== page.row.request_id && 'secondary'" href="#"
+                 @click.prevent="type = r.submission_type; load()" x-text="F.title(r.submission_type)"></a>
+            </template>
+          </p>
+
+          <template x-if="page.is_draft">
+            <div>
+              <div class="panel status stale">
+                <div><strong>Add exceptions, then submit.</strong> Excluded loans and customers are left out of the extract,
+                  overrides replace the LMS values, and validation runs on the remaining records. Nothing is required here:
+                  you can submit straight away. After submitting, the exceptions are locked.</div>
+                <div class="actions">
+                  <button class="secondary" @click="discard()" :disabled="busy">Discard request</button>
+                  <button @click="submit()" :disabled="busy">Submit for validation</button>
+                </div>
+              </div>
+
+              <div class="grid two">
+                <form class="panel stack" @submit.prevent="exclude()">
+                  <h2>Exclude</h2>
+                  <div class="choices">
+                    <label><input type="radio" value="account" x-model="ex.kind"> Loan account numbers</label>
+                    <label><input type="radio" value="customer" x-model="ex.kind"> Customer IDs (all their loans)</label>
+                  </div>
+                  <label for="keys">One per line (paste a column from Excel)</label>
+                  <textarea id="keys" rows="6" required x-model="ex.keys" placeholder="B122HL10788234&#10;B107PL79230310"></textarea>
+                  <label for="ex_reason">Reason <span class="muted">(optional)</span></label>
+                  <input type="text" id="ex_reason" maxlength="500" x-model="ex.reason">
+                  <p><button type="submit" :disabled="busy">Add exclusions</button></p>
+                </form>
+
+                <form class="panel stack" @submit.prevent="override()">
+                  <h2>Override a value</h2>
+                  <label for="account_number">Loan account number</label>
+                  <input type="text" id="account_number" maxlength="50" required x-model="ov.account_number">
+                  <div class="row">
+                    <div><label for="field">Field</label>
+                      <select id="field" required x-model="ov.field">
+                        <template x-for="f in $store.app.meta?.override_fields || []" :key="f.value">
+                          <option :value="f.value" x-text="f.label" :selected="f.value === ov.field"></option>
+                        </template>
+                      </select></div>
+                    <div><label for="value">New value</label>
+                      <input type="text" id="value" inputmode="decimal" required x-model="ov.value" x-ref="value"></div>
+                  </div>
+                  <p class="hint">OD days: whole number. Amounts in rupees, up to 2 decimals; only the ledger balance may be
+                    negative. A new override replaces the previous one for the same loan and field.</p>
+                  <label for="ov_reason">Reason <span class="muted">(optional)</span></label>
+                  <input type="text" id="ov_reason" maxlength="500" x-model="ov.reason">
+                  <p><button type="submit" :disabled="busy">Save override</button></p>
+                </form>
+              </div>
+            </div>
+          </template>
+
+          <div class="panel status" x-show="!page.is_draft">
+            <div><strong>Locked.</strong> This request was submitted on <span x-text="F.dt(page.row.requested_at)"></span>,
+              so its exceptions can no longer change. For more exceptions, create a <a href="new.html">new request</a>
+              for the same date.</div>
+            <a class="button secondary" :href="'batch.html?id=' + batchId">Open the request</a>
+          </div>
+
+          <div class="panel flush">
+            <div class="panel-head"><h2 x-text="(history ? 'All exceptions' : 'Exceptions') + ' of this request'"></h2>
+              <span><span class="muted" x-text="page.adjustments.length + ' item(s)'"></span> ·
+                <a href="#" @click.prevent="history = !history; load()" x-text="history ? 'Hide removed' : 'Show removed'"></a></span></div>
+            <div class="table-wrap" x-show="page.adjustments.length"><table>
+              <thead><tr><th>Kind</th><th>Loan / customer</th><th>Change</th><th>Reason</th><th>By</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                <template x-for="a in page.adjustments" :key="a.adjustment_id">
+                  <tr :class="!a.is_active && 'removed'">
+                    <td x-text="KINDS[a.kind]"></td>
+                    <td class="mono" x-text="a.key"></td>
+                    <td>
+                      <template x-if="a.field"><span><span x-text="a.field_label + ': '"></span>
+                        <span x-show="a.status === 'APPLIED'" x-text="(a.old_value ?? '—') + ' → '"></span>
+                        <strong x-text="a.override_value"></strong></span></template>
+                      <template x-if="!a.field && a.kind === 'EXCLUDE_CUSTOMER' && a.excluded_loans">
+                        <span x-text="a.excluded_loans + ' loan(s)'"></span></template>
+                      <template x-if="!a.field && !(a.kind === 'EXCLUDE_CUSTOMER' && a.excluded_loans)">
+                        <span class="muted">whole loan</span></template>
+                    </td>
+                    <td x-text="a.reason || ''"></td>
+                    <td><span x-text="a.created_by"></span><div class="hint" x-text="F.dt(a.created_at)"></div></td>
+                    <td>
+                      <span class="badge" :class="STATUS[a.status][1]" x-text="STATUS[a.status][0]"></span>
+                      <div class="hint" x-show="a.status === 'REMOVED'" x-text="(a.removed_by || '') + ', ' + F.dt(a.removed_at)"></div>
+                      <div class="hint" x-show="a.status === 'NOT_FOUND'">no such loan / customer in the LMS data</div>
+                      <div class="hint" x-show="a.status === 'APPLIED'" x-text="a.loans_affected + ' loan(s)'"></div>
+                    </td>
+                    <td><button class="small secondary" x-show="a.is_active && page.is_draft" @click="remove(a)">Remove</button></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table></div>
+            <div class="panel-body muted" x-show="!page.adjustments.length">
+              No exclusions or overrides<span x-show="page.is_draft"> yet</span>.</div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </template>
+</main>
+</body>
+</html>

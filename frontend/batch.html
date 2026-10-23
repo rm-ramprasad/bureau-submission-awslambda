@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request · Bureau Submissions</title>
+  <link rel="stylesheet" href="app.css">
+  <script defer src="config.js"></script>
+  <script defer src="vendor/oidc-client-ts.min.js"></script>
+  <script defer src="js/core.js"></script>
+  <script defer src="js/batch.js"></script>
+  <script defer src="vendor/alpine.min.js"></script>
+</head>
+<body data-nav="tracker" data-crumb='<a href="tracker.html">Submission tracker</a> <span>/</span> Request'>
+<main class="content" x-data="batchPage">
+  <p class="loading" x-show="!b">Loading…</p>
+  <template x-if="b">
+    <div>
+      <div class="page-head">
+        <div>
+          <h1 x-text="(b.rows[0].run_mode === 'VALIDATE' ? 'Validation' : 'File generation') + ' · ' + b.tenant.display_name"></h1>
+          <p class="subtitle">As of <span x-text="F.d(b.rows[0].as_of_date)"></span> · request <span class="mono" x-text="id"></span>
+            · requested <span x-text="F.dt(b.rows[0].requested_at)"></span> by <span x-text="b.rows[0].requested_by || '—'"></span>
+            <strong x-show="b.active"> · refreshing every 5 s</strong></p>
+        </div>
+      </div>
+
+      <div class="panel status stale" x-show="b.rows.some((r) => r.status === 'DRAFT')">
+        <div><strong>Step 2 of 4: exceptions.</strong> Add any loans or customers to exclude and values to override,
+          then submit the request for validation. Excluded records are left out of the validation and the files.</div>
+        <div class="actions">
+          <a class="button secondary" :href="'exceptions.html?batch=' + id">Exceptions</a>
+          <button @click="submit()" :disabled="busy">Submit for validation</button>
+        </div>
+      </div>
+
+      <div class="panel flush">
+        <div class="table-wrap"><table>
+          <thead><tr><th>#</th><th>Type</th><th>Bureau</th><th>Status</th><th class="num">Records</th><th class="num">Accepted</th>
+            <th class="num">Rejected</th><th>Snapshot</th><th>Output</th><th></th></tr></thead>
+          <template x-for="r in b.rows" :key="r.request_id">
+            <tbody>
+              <tr>
+                <td class="mono" x-text="r.request_id"></td>
+                <td x-text="F.title(r.submission_type)"></td>
+                <td x-text="r.bureau_code || '—'"></td>
+                <td><span class="badge" :class="'b-' + r.status" x-text="F.title(r.status)"></span>
+                  <span class="muted" x-show="r.attempt_count > 1" x-text="'attempt ' + r.attempt_count"></span></td>
+                <td class="num" x-text="r.total_records ?? ''"></td>
+                <td class="num" x-text="r.accepted_records ?? ''"></td>
+                <td class="num" x-text="r.rejected_records ?? ''"></td>
+                <td><a x-show="r.snapshot_id" :href="'findings.html?snapshot=' + r.snapshot_id" x-text="'#' + r.snapshot_id + ' findings'"></a></td>
+                <td>
+                  <a href="#" x-show="r.status === 'SUCCEEDED' && r.has_file" @click.prevent="download(r, 'file')">File</a>
+                  <span x-show="r.status === 'SUCCEEDED' && r.has_exceptions"> · <a href="#" @click.prevent="download(r, 'exceptions')">Exceptions</a></span>
+                  <div class="hint mono" x-show="r.output_location" x-text="r.output_location" title="Where this file is stored"></div>
+                </td>
+                <td>
+                  <button class="small secondary" x-show="r.status === 'PENDING'" @click="rowAction(r, 'cancel')" :disabled="busy">Cancel</button>
+                  <button class="small secondary" x-show="['FAILED', 'CANCELLED'].includes(r.status)" @click="rowAction(r, 'retry')" :disabled="busy">Retry</button>
+                </td>
+              </tr>
+              <tr x-show="r.error_message"><td></td><td colspan="9" class="error-text" x-text="r.error_message"></td></tr>
+            </tbody>
+          </template>
+        </table></div>
+      </div>
+
+      <template x-for="s in b.snapshots" :key="s.snapshot.snapshot_id">
+        <div class="panel flush">
+          <div class="panel-head">
+            <h2>Snapshot #<span x-text="s.snapshot.snapshot_id"></span>
+              <span class="badge" :class="'b-' + s.snapshot.status" x-text="F.title(s.snapshot.status)"></span></h2>
+            <span><span class="badge b-ACCEPTED" x-text="(s.records.ACCEPTED || 0) + ' accepted'"></span>
+              <span class="badge b-REJECTED" x-text="(s.records.REJECTED || 0) + ' rejected'"></span></span>
+          </div>
+          <div class="table-wrap" x-show="s.summary.length"><table>
+            <thead><tr><th>Rule</th><th>Outcome</th><th class="num">Findings</th></tr></thead>
+            <tbody>
+              <template x-for="x in s.summary" :key="x.rule_id + x.outcome">
+                <tr><td class="mono"><a :href="`findings.html?snapshot=${s.snapshot.snapshot_id}&rule_id=${encodeURIComponent(x.rule_id)}`" x-text="x.rule_id"></a></td>
+                  <td><span class="badge" :class="'b-' + x.outcome" x-text="x.outcome"></span></td>
+                  <td class="num" x-text="x.finding_count"></td></tr>
+              </template>
+            </tbody>
+          </table></div>
+          <div class="panel-body">
+            <p x-show="s.adjusted.excluded_accounts || s.adjusted.overridden_accounts || s.adjusted.not_found">
+              <strong>Adjustments:</strong> <span x-text="s.adjusted.excluded_accounts"></span> loan(s) excluded ·
+              <span x-text="s.adjusted.overridden_accounts"></span> loan(s) overridden
+              <span x-show="s.adjusted.not_found"> · <span class="badge b-WARN" x-text="s.adjusted.not_found + ' not found'"></span></span>
+              <span x-show="s.snapshot.batch_id"> · <a :href="`exceptions.html?batch=${s.snapshot.batch_id}&type=${s.snapshot.submission_type}`">Exceptions</a></span></p>
+            <span class="muted" x-text="`Mapping ${s.snapshot.mapping_version} · canonical ${s.snapshot.canonical_version}`"></span>
+            <span x-show="s.summary.length"> · <a :href="'findings.html?snapshot=' + s.snapshot.snapshot_id">All findings</a> ·
+              <a href="#" @click.prevent="csv(s.snapshot.snapshot_id)">Download CSV</a></span>
+            <p class="error-text" x-show="s.snapshot.error_message" x-text="s.snapshot.error_message"></p>
+          </div>
+        </div>
+      </template>
+
+      <template x-for="g in b.generate_from" :key="g.request_id">
+        <form class="panel" @submit.prevent="generate(g)">
+          <h2 x-text="`Generate files from this validation (${F.title(g.submission_type)})`"></h2>
+          <p class="muted">Files are written from snapshot #<span x-text="g.snapshot_id"></span>: exactly the data validated above.</p>
+          <template x-if="adjusted(g).excluded_accounts || adjusted(g).overridden_accounts">
+            <label class="confirm"><input type="checkbox" x-model="confirm[g.request_id]" required>
+              <span>I confirm <strong x-text="adjusted(g).excluded_accounts + ' loan(s) excluded'"></strong> and
+                <strong x-text="adjusted(g).overridden_accounts + ' loan(s) with overrides'"></strong>, validated in snapshot
+                #<span x-text="g.snapshot_id"></span> (<a :href="`exceptions.html?batch=${id}&type=${g.submission_type}`">review</a>).</span></label>
+          </template>
+          <div class="choices">
+            <template x-for="code in g.bureaus" :key="code">
+              <label><input type="checkbox" :value="code" x-model="chosen[g.request_id]"> <span x-text="F.title(code)"></span></label>
+            </template>
+            <span class="muted" x-show="!g.bureaus.length">No active bureau profiles for this NBFC.</span>
+          </div>
+          <p x-show="g.bureaus.length"><button type="submit" :disabled="busy">Generate files</button></p>
+        </form>
+      </template>
+    </div>
+  </template>
+</main>
+</body>
+</html>
