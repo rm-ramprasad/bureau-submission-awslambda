@@ -13,7 +13,6 @@ from dataclasses import dataclass, field, replace
 from submissions.adjustments import applied_summary
 from submissions.bureaus import BureauRepository
 from submissions.enums import RunMode, SnapshotStatus
-from submissions.ops.heartbeat import Heartbeat
 from submissions.ops.recovery import RecoverySettings, recover
 from submissions.pipeline import Services, get_pipeline
 from submissions.requests import RequestRepository, RequestResult, SubmissionRequest
@@ -40,21 +39,16 @@ class Worker:
     bureaus: BureauRepository
     worker_id: str = f"{socket.gethostname()}-worker"
     recovery: RecoverySettings = field(default_factory=RecoverySettings)
-    heartbeat: Heartbeat | None = None
 
     # ------------------------------------------------------------------ loop
     def run_once(self) -> int:
         """Recover stuck work, then process pending rows until none are left (or one has to wait)."""
-        if self.heartbeat:
-            self.heartbeat.beat()
         recover(self.services.app_engine, self.requests, self.services.snapshots, self.recovery)
         processed = 0
         while (req := self.requests.claim_next(self.worker_id)) is not None:
             if not self.process(req):
                 break                       # released: let the snapshot builder finish first
             processed += 1
-            if self.heartbeat:
-                self.heartbeat.beat(processed=1)
         return processed
 
     def run_request(self, request_id: int) -> bool:

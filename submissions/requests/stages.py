@@ -1,4 +1,4 @@
-"""Request stages and dashboard figures (OVERALL_PLAN.md §5.1 and §6.3).
+"""Request stages and dashboard figures (docs/ARCHITECTURE.md §5 and §6).
 
 A *request* is a validation batch plus the file generations made from its snapshot(s). Its stage is derived
 from the row statuses, never stored. All figures are computed from submission_request rows: a few thousand rows

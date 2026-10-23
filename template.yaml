@@ -3,7 +3,7 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   Bureau submissions, serverless: static frontend (S3 + CloudFront), Cognito sign-in, HTTP API + Lambda (JSON API),
   validate / generate worker Lambdas started by S3 job objects, scheduled jobs. Uses the existing RDS MySQL and files
-  bucket in the existing VPC (no NAT, no interface endpoints). See SERVERLESS_PLAN.md and RUNBOOK.md.
+  bucket in the existing VPC (no NAT, no interface endpoints). See docs/ARCHITECTURE.md and RUNBOOK.md.
 
 Parameters:
   SubnetIds:

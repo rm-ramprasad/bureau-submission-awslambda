@@ -8,6 +8,8 @@ from submissions.db import metadata
 
 _PK = BigInteger().with_variant(Integer(), "sqlite")
 
+# worker_heartbeat (migration 005) is no longer written: queue health comes from the oldest PENDING request.
+# Kept so the code matches the database (applied migrations are never edited).
 worker_heartbeat = Table(
     "worker_heartbeat", metadata,
     Column("worker_id", String(100), primary_key=True),

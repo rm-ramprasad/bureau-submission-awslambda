@@ -1,7 +1,7 @@
 # Runbook
 
 Day-to-day operation of the bureau submission platform on AWS (serverless, ap-south-1, stack `bureau-submissions`).
-Design: [SERVERLESS_PLAN.md](SERVERLESS_PLAN.md). Commands run from the project root in PowerShell, after `aws login`.
+Design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Commands run from the project root in PowerShell, after `aws login`.
 
 **App:** https://dmam8by1hzt4k.cloudfront.net (a company subdomain can be added later).
 
@@ -28,24 +28,54 @@ There is no NAT: the Lambdas reach only RDS and S3.
 
 ## Deploying
 
-| Change | Command | Time |
-|---|---|---|
-| Code, template, migrations | `.\deploy\deploy.ps1` | 2–5 min |
-| Pages only (`frontend/`) | `.\deploy\deploy.ps1 -FrontendOnly` | under a minute |
+### Deployment rules
 
-`deploy.ps1`:
-1. builds the Lambda zip (Linux wheels from `deploy/requirements-lambda.txt`);
-2. reads the database URL from SSM and deploys the stack with `aws cloudformation package/deploy`;
-3. writes `config.js` from the stack outputs, uploads `frontend/` and refreshes CloudFront;
-4. applies pending migrations and makes sure the admin app user exists.
+1. **One repo, two separately deployed parts.**
 
-Settings that are not secret are in `deploy/stack-params.json`. No SAM CLI or Docker is needed.
+   | Part | Folders | Goes to |
+   |---|---|---|
+   | Frontend | `frontend/` | UI bucket + CloudFront (static files) |
+   | Backend | `submissions/`, `clients/`, `migrations/`, `template.yaml`, `deploy/requirements-lambda.txt` | The CloudFormation stack: Lambdas, API, Cognito, schedules |
 
-- **Database URL format:** `mysql+pymysql://user:password@host:3306/db`. URL-encode `@ : / ? # % &` in the password.
-- **To change the database URL:** update the SSM parameter, then run `.\deploy\deploy.ps1`; the Lambdas only pick it up at deploy time.
-- **Rollback:** check out the previous commit and run `.\deploy\deploy.ps1`. Migrations are not undone.
-- **If a first deploy fails** (stack in `ROLLBACK_COMPLETE`), delete the stack before deploying again:
-  `aws cloudformation delete-stack --stack-name bureau-submissions`.
+2. **Deploy only what changed:**
+
+   | What changed | Command | Time |
+   |---|---|---|
+   | Only `frontend/` | `.\deploy\deploy.ps1 -FrontendOnly` | under a minute |
+   | Only backend folders | `.\deploy\deploy.ps1 -BackendOnly` | 2–5 min |
+   | Both | `.\deploy\deploy.ps1` (backend first, then frontend) | 2–5 min |
+
+3. **The Lambda package holds only the backend:** `submissions/`, `clients/`, `migrations/` and the pinned dependencies in `deploy/requirements-lambda.txt`. The frontend never goes into it. All four functions share one zip (about 39 MB unzipped). CloudFormation updates only what changed.
+4. **Backend before frontend** when a change touches both, so the API is never older than the pages calling it. `deploy.ps1` without a switch already does it in that order.
+5. **Migrations:**
+   - each one is a new numbered file in `migrations/`; never edit an applied one;
+   - they run on every backend deploy;
+   - they must work with the code that is already running, because the pages and in-flight runs may be a version behind;
+   - to remove a column, stop using it in one deploy and drop it in a later one.
+6. **`frontend/config.js` is generated at deploy** from the stack outputs (Cognito pool, client, domain). The committed copy is the local-development version (`auth: "none"`); don't edit it for AWS.
+7. **Secrets stay out of the repo.** The database URL lives only in SSM (`/bureau-submissions/database-url`). The Lambdas read it at deploy time, so changing it needs `-BackendOnly`.
+8. **Before deploying:**
+   - run `.\.venv\Scripts\python -m pytest`;
+   - if `template.yaml` changed, run `.\.venv\Scripts\cfn-lint -- template.yaml`;
+   - for frontend changes, check the pages locally (README "Local development").
+9. **Commit, then deploy**, so what runs on AWS is always a commit. **Rollback:** check out the previous commit and deploy the same part again. Migrations are not undone.
+10. **If a first deploy fails** (stack in `ROLLBACK_COMPLETE`): delete the stack before deploying again (`aws cloudformation delete-stack --stack-name bureau-submissions`). Also delete any left-over Cognito user pool named `bureau-submissions-users`.
+11. **Later, deploys from GitHub** (ROADMAP): GitHub Actions with an IAM role through OIDC. `frontend/**` changes run `-FrontendOnly`, anything else `-BackendOnly`.
+
+### What `deploy.ps1` does
+
+1. **Backend** (unless `-FrontendOnly`):
+   - builds the Lambda zip (Linux wheels for python3.14);
+   - reads the database URL from SSM;
+   - deploys the stack with `aws cloudformation package/deploy`;
+   - applies pending migrations and makes sure the admin app user exists.
+2. **Frontend** (unless `-BackendOnly`):
+   - writes `config.js` from the stack outputs;
+   - uploads `frontend/` to the UI bucket;
+   - refreshes CloudFront.
+
+Settings that are not secret are in `deploy/stack-params.json`. No SAM CLI or Docker is needed. Database URL format:
+`mysql+pymysql://user:password@host:3306/db`, with `@ : / ? # % &` in the password URL-encoded.
 
 ## Users
 

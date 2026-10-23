@@ -17,7 +17,7 @@ class RunMode(StrEnum):
 
 
 class ExtractStrategy(StrEnum):
-    """How a tenant's source schema is copied into the canonical snapshot (DESIGN_PLAN.md §4.2)."""
+    """How a tenant's source schema is copied into the canonical snapshot (docs/PIPELINE.md §4.2)."""
     STREAM = "stream"                  # source on a separate server/replica: stream rows across
     INSERT_SELECT = "insert_select"    # source on the same MySQL cluster: INSERT ... SELECT
 

@@ -1,7 +1,7 @@
 """Seed the mock tenants used for development.
 
 nbfc_001 uses the base LMS schema; nbfc_002 will be the variant with column differences
-(OVERALL_PLAN.md to-do D.1). Real NBFCs are added with TenantRepository.upsert during onboarding.
+(mock_data/). Real NBFCs are added with TenantRepository.upsert during onboarding.
 
 Usage:  python -m submissions.tenants.seed
 """

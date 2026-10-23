@@ -11,7 +11,6 @@ from submissions.bureaus import BureauRepository
 from submissions.config import Settings
 from submissions.db import make_engine
 from submissions.logging_config import configure_logging
-from submissions.ops.heartbeat import Heartbeat
 from submissions.pipeline import Services
 from submissions.requests import RequestRepository
 from submissions.snapshot import SnapshotRepository
@@ -25,8 +24,7 @@ def build_worker(settings: Settings, worker_id: str) -> Worker:
     source = app if settings.source_database_url == settings.database_url else make_engine(settings.source_database_url)
     services = Services(app_engine=app, source_engine=source, snapshots=SnapshotRepository(app),
                         base_dir=Path.cwd(), store=make_store(settings))
-    return Worker(services, RequestRepository(app), TenantRepository(app), BureauRepository(app), worker_id,
-                  heartbeat=Heartbeat(app, worker_id))
+    return Worker(services, RequestRepository(app), TenantRepository(app), BureauRepository(app), worker_id)
 
 
 def main() -> None:

@@ -1,12 +1,12 @@
-# Exact runtime versions for the Docker image (tested together on Python 3.14.5).
-# To upgrade: change versions here, run the test suite, rebuild.
+# Exact versions for local development and tests (Python 3.14). The Lambda package uses
+# deploy/requirements-lambda.txt. To upgrade: change versions in both, run the test suite, redeploy.
+apig-wsgi==2.20.0
 awscrt==0.36.0
 blinker==1.9.0
 boto3==1.43.116
 botocore==1.43.116
 click==8.5.0
 Flask==3.1.3
-gunicorn==23.0.0
 itsdangerous==2.2.0
 Jinja2==3.1.6
 jmespath==1.1.0

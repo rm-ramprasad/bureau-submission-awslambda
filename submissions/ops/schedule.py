@@ -1,4 +1,4 @@
-"""Create the scheduled Validate runs for every active NBFC. Trigger from Windows Task Scheduler / cron (RUNBOOK.md).
+"""Create the scheduled Validate runs for every active NBFC. Triggered by EventBridge Scheduler on AWS (jobs Lambda, RUNBOOK.md).
 
 Always validate first: the team reviews findings, captures exclusions/overrides, then generates files from the
 validated run in the UI. The scheduler never generates files directly.

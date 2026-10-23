@@ -1,7 +1,7 @@
 """Seed bureau profiles for tenants.
 
 PLACEHOLDER VALUES: member IDs, header tags and file-name formats must be replaced with the
-values each bureau issued to each NBFC (OVERALL_PLAN.md to-do A.4). Re-running the seed overwrites
+values each bureau issued to each NBFC (docs/ROADMAP.md, "Bureau values per NBFC"). Re-running the seed overwrites
 them, so once real values are loaded, maintain them in the table instead of here.
 
 Usage:  python -m submissions.bureaus.seed nbfc_001 nbfc_002

@@ -1,6 +1,6 @@
 """Low-level UCRF encoding: printable ASCII, TLV fields, fixed-width fields, amounts, dates, text fitting.
 
-Spec references are to UCRF_Consumer_v3.74_Spec.md.
+Spec references are to docs/specs/UCRF_Consumer_v3.74_Spec.md.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ class FormatOptions:
     """Encoding choices the spec leaves open (§14 #16) or that a CIC may set.
 
     Decided 21-10-2026: segment tags WITHOUT a length prefix ("PNN01"), no separator / line break between records.
-    Still open for one more review against a CIC sample file (OVERALL_PLAN H.6).
+    Still open for one more review against a CIC sample file (docs/ROADMAP.md, "CIC sample file").
     """
     segment_tag_tlv: bool = False    # False: "PNN01" (decided). True: "PN03N01" (spec byte arithmetic)
     record_separator: str = ""       # decided: none (no line breaks)

@@ -1,8 +1,8 @@
 # Submission Data Pipeline: Design
 
 > How a submission file is produced: source data → canonical model → validation → file.
-> The platform around it (tenants, requests, worker, UI) and the **single to-do list** are in [OVERALL_PLAN.md](OVERALL_PLAN.md).
-> The consumer file spec is [UCRF_Consumer_v3.74_Spec.md](UCRF_Consumer_v3.74_Spec.md).
+> The platform around it (requests, exceptions, workers, UI, AWS) is in [ARCHITECTURE.md](ARCHITECTURE.md); open work is
+> in [ROADMAP.md](ROADMAP.md). The consumer file spec is [specs/UCRF_Consumer_v3.74_Spec.md](specs/UCRF_Consumer_v3.74_Spec.md).
 
 ---
 
@@ -44,7 +44,7 @@
 | Record dataclasses (`AccountRecord`, …) | Built at import | Python rules, formatter |
 | Reference data `ref_code`, `ref_state_pin` (Appendix C) | Built at import | Validation (enum, PIN/state) |
 | MySQL migration | `python -m submissions.canonical.generate --out migrations/NNN_*.sql`; a test fails if the committed file is stale | Deployment |
-| Mapping template + contract check | Phase D | Adapter onboarding |
+| Mapping template + contract check | `clients/_template/`, `submissions.adapters.check` | Adapter onboarding |
 
 Snapshot tables have a surrogate `row_id`, a `snapshot_id` foreign key with `ON DELETE CASCADE` (purging a snapshot purges its rows), indexes led by `snapshot_id`, and **no NOT NULL or unique constraints**. The snapshot holds what the source holds, and validation judges it. "Required" is a validation rule, not a DB constraint.
 
@@ -202,9 +202,8 @@ The result is written to `record_outcome (snapshot_id, account_key, party_key, o
 ## 9. Code layout (pipeline part)
 
 ```
-canonical/model.yaml            # source of truth
 submissions/
-  canonical/                    # model loader, generated dataclasses, DDL/ref generator
+  canonical/                    # model.yaml (source of truth), model loader, generated dataclasses, DDL/ref generator
   adapters/                     # mapping loader (base + override), compiler, lookups, extract runner, check-mapping
   snapshot/                     # snapshot lifecycle, retention
   validation/                   # rule catalogue, SQL runner, python rules, ucrf pack, cascade, policy, summary
@@ -214,9 +213,7 @@ clients/
   <tenant>/mapping.yaml, generated/*.sql
 ```
 
-## 10. Open questions (pipeline)
+## 10. Open questions
 
-1. **Segment-tag TLV encoding** (`PN03N01` vs `PNN01`), spec §14 #16. Needs a real CIC sample file.
-2. **Base LMS schema** and one example NBFC customisation, to write `_base/mapping.yaml` for real.
-3. **Extract strategy:** can our tables live on the same MySQL cluster (`insert_select`), or only a read replica (`stream`)?
-4. **TH history:** is a one-time historical load needed?
+Open pipeline questions (TLV encoding against a CIC sample file, the real base LMS schema, TH history) are tracked in
+[ROADMAP.md](ROADMAP.md).

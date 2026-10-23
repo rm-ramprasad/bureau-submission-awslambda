@@ -8,7 +8,6 @@ from submissions.bureaus.seed import seed as seed_bureaus
 from submissions.canonical.schema import ENTITY_TABLES
 from submissions.enums import ReportingCycle as C, RequestStatus as S, RunMode as M, SnapshotStatus
 from submissions.ops import audit
-from submissions.ops.heartbeat import Heartbeat, last_seen, worker_alive
 from submissions.ops.recovery import RecoverySettings, recover
 from submissions.ops.retention import purge
 from submissions.ops.schedule import default_as_of, schedule_runs
@@ -39,16 +38,7 @@ def worker(engine, lms_engine, requests_repo, tenant_repo, bureau_repo, tmp_path
                   recovery=RecoverySettings(run_timeout=timedelta(days=3650), build_timeout=timedelta(days=3650)))
 
 
-# ---------------------------------------------------------------- heartbeat and audit
-def test_heartbeat_marks_worker_alive(engine, clock):
-    assert last_seen(engine) is None and not worker_alive(engine, now=T0)
-    hb = Heartbeat(engine, "w1", clock=clock)
-    hb.beat()
-    hb.beat(processed=2)
-    assert last_seen(engine) == T0 and worker_alive(engine, now=T0 + timedelta(seconds=20))
-    assert not worker_alive(engine, now=T0 + timedelta(seconds=31))
-
-
+# ---------------------------------------------------------------- audit
 def test_audit_records_and_lists(engine):
     audit.record(engine, "ops.priya", "RUN_CREATED", tenant_id="nbfc_001", target="b1", bureaus=["CIBIL"])
     audit.record(engine, "scheduler", "RUN_SCHEDULED", tenant_id="nbfc_002", target="b2")
@@ -110,13 +100,6 @@ def test_retry_rebuilds_a_failed_batch_snapshot(worker, requests_repo, tenant_re
     retried = requests_repo.get(row.request_id)
     assert retried.status is S.SUCCEEDED and retried.attempt_count == 2, retried.error_message
     assert SnapshotRepository(worker.services.app_engine).get(retried.snapshot_id).status is SnapshotStatus.VALIDATED
-
-
-def test_worker_beats_while_polling(worker, engine, requests_repo):
-    worker.heartbeat = Heartbeat(engine, "w-ops")
-    requests_repo.create_batch("nbfc_001", AS_OF, M.VALIDATE, ["CONSUMER"])
-    worker.run_once()
-    assert worker_alive(engine)
 
 
 # ---------------------------------------------------------------- retention
