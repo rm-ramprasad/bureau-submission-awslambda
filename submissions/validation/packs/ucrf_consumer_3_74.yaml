@@ -8,6 +8,9 @@
 #   cascade  applied after all rules when deciding each record (submissions/validation/engine.py)
 # Generated as well (see generated:): a REQUIRED rule per required canonical column and an ENUM rule per
 # code column. Outcomes can be changed per tenant with validation_policy, never by editing this file.
+# Business category (UI): taken from the rule ID (UCRF.<segment>.…); a rule may set `category:` to one of
+# submissions/validation/results.py CATEGORIES to override it. `expected: true` marks the spec's normal handling
+# (e.g. a field the spec says to drop): shown as "Spec rule (no action)" and never counted as a gap. Output unchanged.
 #
 # Card account types (10, 16, 31, 35) come from ref_code list card_account_type.
 
@@ -405,6 +408,7 @@ rules:
     field: asset_classification
     outcome: REJECT_FIELD
     message: Days past due takes precedence. Asset classification is not reported when both are present
+    expected: true                     # spec precedence, not a data problem: hits most loans, not a "gap"
     sql: |
       SELECT a.row_id, a.account_key, NULL AS party_key, a.asset_classification AS value
       FROM c_account a

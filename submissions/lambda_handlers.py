@@ -118,7 +118,7 @@ def _schedule(event) -> dict:
     from submissions.requests import RequestRepository
     result = schedule_runs(engine(), event["cycle"],
                            as_of=date.fromisoformat(event["as_of"]) if event.get("as_of") else None,
-                           tenant_ids=event.get("tenants"))
+                           tenant_ids=[settings().tenant] if settings().tenant else None)   # this deployment's NBFC
     dispatcher, requests = make_dispatcher(settings()), RequestRepository(engine())
     for batch_id in result.created.values():
         dispatch_batch(dispatcher, requests, batch_id)

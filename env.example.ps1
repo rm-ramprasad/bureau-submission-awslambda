@@ -5,6 +5,9 @@
 
 $env:SUBMISSIONS_DATABASE_URL  = "mysql+pymysql://<user>:<url-encoded-password>@<host>:3306/my_demo_db"
 
+# The one NBFC this deployment serves (on AWS: "Tenant" in deploy/stack-params.json). nbfc_002 = the customised layout.
+$env:SUBMISSIONS_TENANT        = "nbfc_001"
+
 # Generated files: "local" (folder SUBMISSIONS_OUTPUT_DIR, default output/) or AWS S3 (credentials from `aws login`)
 $env:SUBMISSIONS_STORAGE       = "local"
 # $env:SUBMISSIONS_STORAGE     = "s3"

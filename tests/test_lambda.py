@@ -113,7 +113,7 @@ def test_worker_handler_asks_lambda_to_retry_when_the_snapshot_is_busy(worker, r
 def jobs_env(engine, monkeypatch, tmp_path):
     from submissions.config import Settings
     monkeypatch.setattr(L, "engine", lambda: engine)
-    monkeypatch.setattr(L, "settings", lambda: Settings("sqlite://", "sqlite://", tmp_path))
+    monkeypatch.setattr(L, "settings", lambda: Settings("sqlite://", "sqlite://", tmp_path, tenant="nbfc_001"))
     sent = []
     monkeypatch.setattr("submissions.dispatch.make_dispatcher",
                         lambda settings: type("D", (), {"dispatch": lambda self, rows: sent.extend(
@@ -123,8 +123,8 @@ def jobs_env(engine, monkeypatch, tmp_path):
 
 def test_jobs_schedule_creates_and_dispatches_validations(jobs_env, requests_repo):
     result = L.jobs({"job": "schedule", "cycle": "ME", "as_of": "2026-09-30"}, None)
-    assert set(result["created"]) == {"nbfc_001", "nbfc_002"}
-    assert len(jobs_env) == 2
+    assert set(result["created"]) == {"nbfc_001"}                  # only the deployment's NBFC, not nbfc_002
+    assert len(jobs_env) == 1
     assert L.jobs({"job": "schedule", "cycle": "ME", "as_of": "2026-09-30"}, None)["created"] == {}   # no duplicates
 
 

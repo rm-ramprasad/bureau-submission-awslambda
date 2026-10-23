@@ -148,17 +148,16 @@ const App = {
     throw new ApiError(message, 403);
   },
 
-  setTenant(tenant) {
-    App.store().tenant = tenant;
-    try { localStorage.setItem("tenant", tenant); } catch (e) { /* kept for this page only */ }
-    window.dispatchEvent(new CustomEvent("tenant-changed"));
+  // The deployment's NBFC (from /meta); the API applies it to every call whatever the page sends.
+  tenantName() {
+    const s = App.store();
+    return s.meta?.tenants.find((t) => t.tenant_id === s.tenant)?.display_name || s.tenant;
   },
 };
 
 document.addEventListener("alpine:init", () => {
-  let saved = "";
-  try { saved = localStorage.getItem("tenant") || ""; } catch (e) { /* none */ }
-  Alpine.store("app", { tenant: saved, meta: null, user: null, health: null, flashes: [] });
+  try { localStorage.removeItem("tenant"); } catch (e) { /* none */ }     // left over from the NBFC selector
+  Alpine.store("app", { tenant: "", meta: null, user: null, health: null, flashes: [] });
   try {
     const next = JSON.parse(sessionStorage.getItem("flash") || "null");
     sessionStorage.removeItem("flash");
@@ -166,8 +165,7 @@ document.addEventListener("alpine:init", () => {
   } catch (e) { /* none */ }
   Promise.all([Api.get("/me"), Api.get("/meta"), Api.get("/health")]).then(([me, meta, health]) => {
     const s = Alpine.store("app");
-    Object.assign(s, { user: me, meta, health });
-    if (s.tenant && !meta.tenants.some((t) => t.tenant_id === s.tenant)) App.setTenant("");
+    Object.assign(s, { user: me, meta, health, tenant: meta.tenant || "" });
     if (sessionStorage.getItem("signed-in")) {      // right after the sign-in redirect: record the login once
       sessionStorage.removeItem("signed-in");
       Api.post("/session").catch(() => {});
@@ -229,15 +227,8 @@ function renderShell() {
   <div class="main">
     <header class="topbar">
       <div class="crumbs"><a href="index.html">Bureau reporting</a> <span>/</span> ${document.body.dataset.crumb || ""}</div>
-      <div class="tenant-picker">
-        <label for="global-tenant">NBFC</label>
-        <select id="global-tenant" :value="$store.app.tenant" @change="App.setTenant($event.target.value)">
-          <option value="">All NBFCs</option>
-          <template x-for="t in $store.app.meta?.tenants || []" :key="t.tenant_id">
-            <option :value="t.tenant_id" x-text="t.display_name" :selected="t.tenant_id === $store.app.tenant"></option>
-          </template>
-        </select>
-      </div>
+      <div class="tenant-picker" x-show="$store.app.tenant"><span class="muted">NBFC</span>
+        <strong x-text="App.tenantName()"></strong></div>
       <a class="button" href="new.html">${icon("plus")} New request</a>
     </header>
   </div>`;

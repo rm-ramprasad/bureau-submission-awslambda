@@ -31,6 +31,9 @@ Parameters:
   CognitoDomainPrefix:
     Type: String
     Description: Prefix of the Cognito sign-in domain (<prefix>.auth.<region>.amazoncognito.com), globally unique
+  Tenant:
+    Type: String
+    Description: The one NBFC this deployment serves (tenant_id, e.g. nbfc_001); its LMS schema is on the same RDS
   RetentionDays:
     Type: Number
     Default: 90
@@ -54,6 +57,7 @@ Globals:
         SUBMISSIONS_S3_PREFIX: !Ref FilesPrefix
         SUBMISSIONS_S3_REGION: !Ref AWS::Region
         SUBMISSIONS_JOBS_BUCKET: !Sub ${AWS::StackName}-jobs-${AWS::AccountId}   # by name: the bucket triggers the workers
+        SUBMISSIONS_TENANT: !Ref Tenant
         SUBMISSIONS_AUTH: cognito
         SUBMISSIONS_COGNITO_CLIENT_ID: !Ref UserPoolClient
         SUBMISSIONS_LOG_LEVEL: INFO

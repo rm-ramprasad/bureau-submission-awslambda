@@ -77,7 +77,10 @@ def last_month_end(today: date | None = None) -> date:
 
 
 def selected_tenant() -> str | None:
-    """NBFC chosen in the top bar (None = all). Unknown ids are refused."""
+    """The deployment's NBFC when configured (whatever the page sends); otherwise the `tenant` argument (None = all).
+    Unknown ids are refused."""
+    if svc().tenant:
+        return svc().tenant
     tenant_id = arg("tenant") or None
     if tenant_id and tenant_id not in {t.tenant_id for t in svc().tenants.list(active_only=False)}:
         fail(f"Unknown NBFC {tenant_id}")
@@ -159,8 +162,9 @@ def meta():
     """Choices the pages need: NBFCs, submission types, bureaus, cycles, stages, periods, outcomes, fields."""
     s = svc()
     return jsonify(
+        tenant=s.tenant,
         tenants=[{"tenant_id": t.tenant_id, "display_name": t.display_name, "is_active": t.is_active}
-                 for t in s.tenants.list(active_only=False)],
+                 for t in s.tenants.list(active_only=False) if not s.tenant or t.tenant_id == s.tenant],
         submission_types=[{"value": t.value, "label": t.value.title(), "enabled": t in enabled_types()}
                           for t in SubmissionType],
         bureaus=options(BureauCode), cycles=options(ReportingCycle), stages=options(Stage), periods=options(Period),
@@ -262,7 +266,7 @@ def create_request():
     s, b = svc(), body()
     types = b.get("submission_types") or []
     try:
-        tenant = s.tenants.get_active(b.get("tenant_id") or "")
+        tenant = s.tenants.get_active(s.tenant or b.get("tenant_id") or "")
     except (TenantNotFoundError, InactiveTenantError):
         fail("Select an active NBFC.")
     as_of = parse_date(b.get("as_of_date"), "As-of date")
@@ -287,7 +291,7 @@ def create_request():
 def batch(batch_id: str):
     s = svc()
     rows = s.requests.list_batch(batch_id)
-    if not rows:
+    if not rows or (s.tenant and rows[0].tenant_id != s.tenant):
         fail(f"No request {batch_id}", 404)
     snapshots = []
     for snapshot_id in sorted({r.snapshot_id for r in rows if r.snapshot_id}):
@@ -296,7 +300,7 @@ def batch(batch_id: str):
         except SnapshotNotFoundError:
             continue
         snapshots.append({"snapshot": snap, "records": results.record_counts(s.engine, snapshot_id),
-                          "summary": results.summary(s.engine, snapshot_id)[:10],
+                          "report": results.report(s.engine, snapshot_id, *rules.report_hints(snap.submission_type)),
                           "adjusted": applied_summary(s.engine, snapshot_id)})
     validated = {x["snapshot"].snapshot_id for x in snapshots if x["snapshot"].status is SnapshotStatus.VALIDATED}
     generate_from = [{"request_id": r.request_id, "submission_type": r.submission_type, "snapshot_id": r.snapshot_id,
@@ -583,9 +587,12 @@ def _draft_for(snap) -> str:
 
 def _snapshot(snapshot_id: int):
     try:
-        return svc().snapshots.get(snapshot_id)
+        snap = svc().snapshots.get(snapshot_id)
     except SnapshotNotFoundError:
         fail(f"No snapshot {snapshot_id}", 404)
+    if svc().tenant and snap.tenant_id != svc().tenant:
+        fail(f"No snapshot {snapshot_id}", 404)
+    return snap
 
 
 def _finding_account(snapshot_id: int):
@@ -632,19 +639,25 @@ def override_from_findings(snapshot_id: int):
     return jsonify(batch_id=draft, type=snap.submission_type, account=number, field=body().get("field") or None)
 
 
-def _filter() -> results.FindingFilter:
-    return results.FindingFilter(**{k: request.args.get(k) or None for k in ("rule_id", "outcome", "account_key",
-                                                                              "party_key")})
+def _filter(snap) -> results.FindingFilter:
+    """Filter from the query string; ?category= is resolved to that category's rule IDs in this snapshot."""
+    cat = request.args.get("category") or None
+    if cat and cat not in results.CATEGORIES:
+        fail(f"Unknown category {cat}")
+    rule_ids = results.category_rule_ids(svc().engine, snap.snapshot_id, cat,
+                                         rules.report_hints(snap.submission_type)[0]) if cat else None
+    return results.FindingFilter(rule_ids=rule_ids, **{k: request.args.get(k) or None for k in (
+        "rule_id", "outcome", "account_key", "party_key")})
 
 
 @bp.get("/snapshots/<int:snapshot_id>/findings")
 def findings(snapshot_id: int):
     s = svc()
     snap = _snapshot(snapshot_id)
-    flt = _filter()
+    flt = _filter(snap)
     page = max(1, request.args.get("page", 1, type=int))
     rows, total = results.findings(s.engine, snapshot_id, flt, PAGE_SIZE, (page - 1) * PAGE_SIZE)
-    return jsonify(snapshot=snap, summary=results.summary(s.engine, snapshot_id),
+    return jsonify(snapshot=snap, report=results.report(s.engine, snapshot_id, *rules.report_hints(snap.submission_type)),
                    records=results.record_counts(s.engine, snapshot_id), findings=rows, total=total, filter=flt,
                    page=page, pages=max(1, math.ceil(total / PAGE_SIZE)),
                    overridable=[f.value for f in OverrideField])
@@ -657,7 +670,7 @@ def findings_csv(snapshot_id: int):
     s = svc()
     snap = _snapshot(snapshot_id)
     name = f"findings-{snap.tenant_id}-{snap.as_of_date:%Y%m%d}-{snapshot_id}.csv"
-    chunks = results.findings_csv(s.engine, snapshot_id, _filter())
+    chunks = results.findings_csv(s.engine, snapshot_id, _filter(snap))
     audit.record(s.engine, current_user(), "FINDINGS_EXPORTED", tenant_id=snap.tenant_id, target=snapshot_id)
     if s.exports is None:
         return Response(chunks, mimetype="text/csv", headers={"Content-Disposition": f'attachment; filename="{name}"'})
@@ -692,7 +705,7 @@ def _rules_type() -> SubmissionType:
 def _tenant_required(what: str) -> str:
     tenant_id = selected_tenant()
     if not tenant_id:
-        fail(f"Select an NBFC in the top bar: {what} are per NBFC.")
+        fail(f"Select an NBFC: {what} are per NBFC.")
     return tenant_id
 
 

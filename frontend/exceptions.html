@@ -12,7 +12,7 @@
   <script defer src="vendor/alpine.min.js"></script>
 </head>
 <body data-nav="exceptions" data-crumb="Exceptions">
-<main class="content" x-data="exceptionsPage" @tenant-changed.window="batchId || load()">
+<main class="content" x-data="exceptionsPage">
 
   <!-- ===================== list: requests waiting for their exceptions -->
   <template x-if="!batchId">

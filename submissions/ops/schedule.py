@@ -79,7 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     settings = Settings.from_env()
     configure_logging(settings.log_level)
-    result = schedule_runs(make_engine(settings.database_url), args.cycle, as_of=args.as_of, tenant_ids=args.tenant)
+    result = schedule_runs(make_engine(settings.database_url), args.cycle, as_of=args.as_of,
+                           tenant_ids=args.tenant or ([settings.tenant] if settings.tenant else None))
     for tenant, batch in result.created.items():
         print(f"created  {tenant:20} {batch}")
     for tenant, reason in result.skipped.items():

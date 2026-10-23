@@ -1,10 +1,11 @@
-// Findings of one snapshot (?snapshot=<id>[&rule_id=]): summary, filters, paging, CSV, and Exclude / Override into a
-// new draft request for the same NBFC, date and type.
+// Findings of one snapshot (?snapshot=<id>[&rule_id=|&category=]): KPIs, issues by category, filters, paging, CSV,
+// and Exclude / Override into a new draft request for the same NBFC, date and type.
 document.addEventListener("alpine:init", () => {
   Alpine.data("findingsPage", () => ({
     snapshot: F.param("snapshot"),
     data: null,
-    flt: { rule_id: F.param("rule_id") || "", outcome: "", account_key: "", party_key: "" },
+    flt: { category: F.param("category") || "", rule_id: F.param("rule_id") || "", outcome: "", account_key: "",
+           party_key: "" },
     page: 1,
     busy: false,
 
@@ -16,7 +17,19 @@ document.addEventListener("alpine:init", () => {
       } catch (e) { App.error(e); }
     },
 
-    ruleIds() { return [...new Set(this.data.summary.map((s) => s.rule_id))]; },
+    // One entry per rule (a rule can appear with two outcomes after a policy change), in the chosen category
+    issues() {
+      const cats = this.data.report.categories.filter((c) => !this.flt.category || c.key === this.flt.category);
+      const seen = new Map();
+      cats.flatMap((c) => c.rules).forEach((r) => seen.has(r.rule_id) || seen.set(r.rule_id, r));
+      return [...seen.values()];
+    },
+    expected(f) { return this.data.report.expected_rules.includes(f.rule_id) && f.outcome !== "REJECT_RECORD"; },
+    pick(f) {
+      Object.assign(this.flt, { category: "", rule_id: "" }, f);
+      this.page = 1;
+      this.load();
+    },
     canAdjust() { return this.data.snapshot.status === "VALIDATED"; },
 
     async run(fn) {

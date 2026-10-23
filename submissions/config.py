@@ -22,6 +22,7 @@ class Settings:
     cognito_client_id: str | None = None     # expected `aud` of the ID token (auth = cognito)
     jobs_bucket: str | None = None           # job objects that start the worker Lambdas, and CSV exports; None = local
     frontend_dir: Path | None = None         # local development: serve the static frontend from this folder
+    tenant: str | None = None                # the one NBFC this deployment serves; None = all (tests only)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -31,6 +32,9 @@ class Settings:
                 "SUBMISSIONS_DATABASE_URL is not set, "
                 "e.g. mysql+pymysql://user:password@localhost:3306/submissions"
             )
+        tenant = os.environ.get("SUBMISSIONS_TENANT")
+        if not tenant:
+            raise RuntimeError("SUBMISSIONS_TENANT is not set: the NBFC this deployment serves, e.g. nbfc_001")
         frontend = os.environ.get("SUBMISSIONS_FRONTEND_DIR")
         return cls(
             database_url=url,
@@ -46,4 +50,5 @@ class Settings:
             cognito_client_id=os.environ.get("SUBMISSIONS_COGNITO_CLIENT_ID") or None,
             jobs_bucket=os.environ.get("SUBMISSIONS_JOBS_BUCKET") or None,
             frontend_dir=Path(frontend) if frontend else None,
+            tenant=tenant,
         )

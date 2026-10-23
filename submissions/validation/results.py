@@ -7,12 +7,36 @@ import io
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from sqlalchemy import Engine, func, select
+from collections import defaultdict
 
+from sqlalchemy import Engine, and_, func, select, union
+
+from submissions.canonical.schema import ENTITY_TABLES
+from submissions.enums import Outcome, RecordOutcome
 from submissions.validation.tables import record_outcome, validation_finding, validation_summary
 
 OUTCOME_ORDER = ["REJECT_FILE", "REJECT_RECORD", "REJECT_SEGMENT", "REJECT_FIELD", "WARN"]
 EXPORT_COLUMNS = ["rule_id", "outcome", "segment", "field", "account_key", "party_key", "value", "message"]
+
+# Business view of the findings: categories (in display order) and what each outcome does to the file.
+CATEGORIES = {"MINIMUM": "Minimum reporting requirements", "PERSONAL": "Name & personal details",
+              "IDENTITY": "Identity documents", "CONTACT": "Contact details", "ADDRESS": "Address",
+              "LOAN": "Loan details", "CUSTOM": "NBFC-specific checks"}
+_SEGMENT_CATEGORY = {"REC": "MINIMUM", "PN": "PERSONAL", "ID": "IDENTITY", "PT": "CONTACT", "EC": "CONTACT",
+                     "PA": "ADDRESS", "TL": "LOAN", "TH": "LOAN"}
+EFFECTS = {"REJECT_FILE": "Blocks the whole file", "REJECT_RECORD": "Not reported",
+           "REJECT_SEGMENT": "Partly reported", "REJECT_FIELD": "Value dropped", "WARN": "Warning only"}
+_GAP_OUTCOMES = (str(Outcome.REJECT_SEGMENT), str(Outcome.REJECT_FIELD))
+
+
+def category(rule_id: str, segment: str | None, overrides: dict[str, str] | None = None) -> str:
+    """Category of a rule: the pack's `category:` if set, else from the rule ID (UCRF.<seg>.…) or its segment."""
+    if overrides and rule_id in overrides:
+        return overrides[rule_id]
+    if not rule_id.startswith("UCRF."):
+        return "CUSTOM"
+    token = rule_id.split(".")[1]               # REQUIRED / ENUM rules are generated: use their segment
+    return _SEGMENT_CATEGORY.get(token) or _SEGMENT_CATEGORY.get(segment or "", "LOAN")
 
 
 @dataclass(frozen=True)
@@ -21,6 +45,7 @@ class FindingFilter:
     outcome: str | None = None
     account_key: str | None = None
     party_key: str | None = None
+    rule_ids: tuple[str, ...] | None = None     # a category, resolved to its rule IDs by the caller
 
     def where(self, snapshot_id: int):
         f = validation_finding.c
@@ -29,6 +54,8 @@ class FindingFilter:
             value = getattr(self, name)
             if value:
                 clauses.append(f[name] == value)
+        if self.rule_ids is not None:
+            clauses.append(f.rule_id.in_(self.rule_ids))
         return clauses
 
 
@@ -46,6 +73,85 @@ def record_counts(engine: Engine, snapshot_id: int) -> dict[str, int]:
     with engine.connect() as conn:
         return dict(conn.execute(select(o.outcome, func.count()).where(o.snapshot_id == snapshot_id)
                                  .group_by(o.outcome)).all())
+
+
+def _finding_records(snapshot_id: int):
+    """Distinct (rule_id, outcome, account_key, party_key) per finding and record (account x holder) it applies to.
+    A finding with only a party key hits every loan of that borrower; with only an account key, every holder."""
+    f, h = validation_finding.c, ENTITY_TABLES["account_holder"].c
+    cols = (f.rule_id, f.outcome, h.account_key, h.party_key)
+    on = {"both": and_(f.account_key == h.account_key, f.party_key == h.party_key),
+          "account": and_(f.account_key == h.account_key, f.party_key.is_(None)),
+          "party": and_(f.party_key == h.party_key, f.account_key.is_(None))}
+    return union(*(select(*cols).select_from(validation_finding.join(
+        ENTITY_TABLES["account_holder"], and_(h.snapshot_id == f.snapshot_id, cond)))
+        .where(f.snapshot_id == snapshot_id) for cond in on.values())).subquery()
+
+
+EXPECTED_EFFECT = "Spec rule (no action)"
+
+
+def report(engine: Engine, snapshot_id: int, overrides: dict[str, str] | None = None,
+           expected: frozenset[str] = frozenset()) -> dict:
+    """Findings for business users: record KPIs, rejected records by main reason's category, and per category the
+    rules with their message, effect, findings and records affected. Counts are records, not findings.
+    `expected` rules (the spec's normal handling) are listed last and never count as gaps."""
+    o = record_outcome.c
+    fr = _finding_records(snapshot_id)
+    with engine.connect() as conn:
+        totals = dict(conn.execute(select(o.outcome, func.count()).where(o.snapshot_id == snapshot_id)
+                                   .group_by(o.outcome)).all())
+        reasons = conn.execute(select(o.reason_rule_id, func.count()).where(
+            o.snapshot_id == snapshot_id, o.outcome == str(RecordOutcome.REJECTED)).group_by(o.reason_rule_id)).all()
+        hits = conn.execute(select(fr.c.rule_id, fr.c.outcome, fr.c.account_key, fr.c.party_key, o.outcome.label("rec"))
+                            .select_from(fr.join(record_outcome, and_(
+                                o.snapshot_id == snapshot_id, o.account_key == fr.c.account_key,
+                                o.party_key == fr.c.party_key)))).all()
+        f = validation_finding.c
+        rules = conn.execute(select(f.rule_id, f.outcome, func.min(f.segment).label("segment"),
+                                    func.min(f.message).label("message"), func.count().label("findings"))
+                             .where(f.snapshot_id == snapshot_id).group_by(f.rule_id, f.outcome)).all()
+
+    segments = {r.rule_id: r.segment for r in rules}
+    records = defaultdict(set)                  # (rule_id, outcome) -> records it hits
+    gaps, gaps_by_cat = set(), defaultdict(set)
+    for x in hits:
+        key = (x.account_key, x.party_key)
+        records[(x.rule_id, x.outcome)].add(key)
+        if x.outcome in _GAP_OUTCOMES and x.rec == str(RecordOutcome.ACCEPTED) and x.rule_id not in expected:
+            gaps.add(key)
+            gaps_by_cat[category(x.rule_id, segments.get(x.rule_id), overrides)].add(key)
+    not_reported = defaultdict(int)
+    for rule_id, n in reasons:
+        not_reported[category(rule_id, segments.get(rule_id), overrides) if rule_id else "MINIMUM"] += n
+
+    rank = {x: i for i, x in enumerate(OUTCOME_ORDER)}
+    by_cat = defaultdict(list)
+    for r in rules:
+        is_expected = r.rule_id in expected and r.outcome in _GAP_OUTCOMES + (str(Outcome.WARN),)
+        by_cat[category(r.rule_id, r.segment, overrides)].append(dict(
+            rule_id=r.rule_id, outcome=r.outcome, message=r.message, expected=is_expected,
+            effect=EXPECTED_EFFECT if is_expected else EFFECTS.get(r.outcome, r.outcome),
+            findings=r.findings, records=len(records[(r.rule_id, r.outcome)])))
+    categories = [dict(key=k, label=label, not_reported=not_reported.get(k, 0), with_gaps=len(gaps_by_cat[k]),
+                       rules=sorted(by_cat[k], key=lambda r: (r["expected"], rank.get(r["outcome"], 99),
+                                                              -r["records"], r["rule_id"])))
+                  for k, label in CATEGORIES.items() if by_cat[k]]
+    accepted, rejected = totals.get(str(RecordOutcome.ACCEPTED), 0), totals.get(str(RecordOutcome.REJECTED), 0)
+    return dict(kpis=dict(records=accepted + rejected, reported=accepted, not_reported=rejected, with_gaps=len(gaps)),
+                not_reported_by_category=[dict(key=c["key"], label=c["label"], records=c["not_reported"])
+                                          for c in sorted(categories, key=lambda c: -c["not_reported"])
+                                          if c["not_reported"]],
+                categories=categories, effects=EFFECTS, expected_rules=sorted(expected))
+
+
+def category_rule_ids(engine: Engine, snapshot_id: int, key: str, overrides: dict[str, str] | None = None) -> tuple:
+    """The rule IDs of this snapshot's findings that fall in one category (for the Findings page filter)."""
+    f = validation_finding.c
+    with engine.connect() as conn:
+        rows = conn.execute(select(f.rule_id, func.min(f.segment)).where(f.snapshot_id == snapshot_id)
+                            .group_by(f.rule_id)).all()
+    return tuple(r for r, seg in rows if category(r, seg, overrides) == key)
 
 
 def findings(engine: Engine, snapshot_id: int, flt: FindingFilter, limit: int = 200, offset: int = 0) -> tuple[list, int]:

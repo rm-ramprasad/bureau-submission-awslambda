@@ -8,8 +8,8 @@
 
 ## 1. Context
 
-- One LMS provider on AWS serves ~50 NBFCs. Every NBFC runs on the **same MySQL engine** but has **its own schema**, and column metadata can differ per NBFC.
-- **Goal:** one product approach for all NBFCs. Per-NBFC effort is limited to a **mapping** plus configuration.
+- Each customer (NBFC) runs its own LMS on MySQL in its own AWS account; one deployment of this app per customer. Column metadata can differ per customer.
+- **Goal:** one product for all customers. Per-customer effort is limited to a **mapping** plus configuration.
 - **Validation is a first-class stage.** It can run on its own before any file exists, its results are stored in tables and tracked, and it is extensible with client rules beyond UCRF.
 
 ## 2. Architecture
@@ -159,7 +159,7 @@ SELECT a.account_key, h.party_key, a.closed_date AS value
 FROM c_account a JOIN c_account_holder h ON h.snapshot_id = a.snapshot_id AND h.account_key = a.account_key
 WHERE a.snapshot_id = :snapshot_id AND a.closed_date IS NOT NULL AND a.current_balance > 0
 ```
-The runner wraps each rule as `INSERT INTO validation_finding … SELECT`. Rules are written once, against canonical tables, for all NBFCs.
+The runner wraps each rule as `INSERT INTO validation_finding … SELECT`. Rules are written once, against canonical tables, for every customer.
 
 **Python rules** cover the few that SQL can't express well: Aadhaar Verhoeff, name rules (tokens, initials, S/O descriptors, salutations), phone pre-edits, and the full email check set.
 

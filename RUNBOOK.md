@@ -116,7 +116,7 @@ EventBridge Scheduler runs the `JobsFunction` (India time):
 |---|---|
 | Every 15 minutes | `recovery`: frees runs whose Lambda died, re-starts PENDING runs that waited more than 10 minutes |
 | Daily 02:00 | `retention` (90 days): purges snapshot rows, findings and files; summaries are kept |
-| 2nd of the month, 06:00 | `schedule ME`: validation runs for every active NBFC (as of last month-end) |
+| 2nd of the month, 06:00 | `schedule ME`: validation run for the deployment's NBFC (as of last month-end) |
 | 10th / 17th / 24th, 06:00 | `schedule W1` / `W2` / `W3` |
 
 Scheduled runs are always **validations**: the team reviews findings, then generates files in the app.

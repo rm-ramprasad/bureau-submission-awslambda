@@ -8,5 +8,6 @@
   "DatabaseUrlParameter": "/bureau-submissions/database-url",
   "AdminEmail": "ramprasad@openterrace.in",
   "AdminName": "Ram Prasad",
-  "CognitoDomainPrefix": "bureau-submissions-openterrace"
+  "CognitoDomainPrefix": "bureau-submissions-openterrace",
+  "Tenant": "nbfc_001"
 }

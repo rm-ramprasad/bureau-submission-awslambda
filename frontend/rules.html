@@ -12,7 +12,7 @@
   <script defer src="vendor/alpine.min.js"></script>
 </head>
 <body data-nav="rules" data-crumb="Rules &amp; policies">
-<main class="content" x-data="rulesPage" @tenant-changed.window="cancelEdit(); load()">
+<main class="content" x-data="rulesPage">
   <div class="page-head">
     <div>
       <h1>Rules &amp; policies<span x-show="tenantName()" x-text="' · ' + tenantName()"></span></h1>
@@ -22,7 +22,7 @@
     </div>
   </div>
 
-  <div class="flash error" x-show="data && !data.tenant_id">Select an NBFC in the top bar to change its rule settings.
+  <div class="flash error" x-show="data && !data.tenant_id">No NBFC is configured for this deployment (SUBMISSIONS_TENANT), so its rule settings cannot be changed.
     Showing the defaults.</div>
   <p class="loading" x-show="!data">Loading…</p>
 

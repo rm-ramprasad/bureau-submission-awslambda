@@ -56,7 +56,7 @@ if (-not $FrontendOnly) {
     $overrides = @(
         "SubnetIds=$($p.SubnetIds -join ',')", "LambdaSecurityGroupId=$($p.LambdaSecurityGroupId)",
         "FilesBucket=$($p.FilesBucket)", "FilesPrefix=$($p.FilesPrefix)", "AdminEmail=$($p.AdminEmail)",
-        "CognitoDomainPrefix=$($p.CognitoDomainPrefix)", "DatabaseUrl=$dbUrl")
+        "CognitoDomainPrefix=$($p.CognitoDomainPrefix)", "Tenant=$($p.Tenant)", "DatabaseUrl=$dbUrl")
     Invoke-Aws cloudformation deploy --template-file build\packaged.yaml --stack-name $Stack `
         --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND --no-fail-on-empty-changeset `
         --parameter-overrides @overrides

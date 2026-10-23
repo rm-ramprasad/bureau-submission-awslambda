@@ -9,7 +9,10 @@
 
 ## 1. Scope
 
-- **Context:** one LMS provider on AWS serves about 50 NBFCs. Every NBFC runs on the **same MySQL engine** with **its own schema**, and columns can differ per NBFC.
+- **Context:** each customer (NBFC) has **their own AWS account** with their own LMS deployment on RDS MySQL. This app
+  is deployed into that account alongside the LMS, as the same `bureau-submissions` stack, and serves **that one NBFC**
+  (stack parameter `Tenant` → `SUBMISSIONS_TENANT`). The LMS layout (columns) can differ per customer; the mapping
+  absorbs it. The data model keeps `tenant_id`; the mock tenants `nbfc_001` / `nbfc_002` are two layouts for testing.
 - **Users:** an internal team of about 5, using the app about 10 times a month.
 - **What a user does:**
   1. Picks an NBFC, an as-of date and one or more **submission types**. Consumer now; Commercial and NeSL later, with their own specs.
@@ -33,13 +36,13 @@
 | 9 | Onboarding | A mapping file per NBFC (base LMS mapping + overrides + lookups), compiled to MySQL. |
 | 10 | Snapshot | Each validation extracts into canonical snapshot tables; validation and formatting read the same frozen data. |
 | 11 | Validation | A separate stage. SQL-first rules over canonical tables, Python only for algorithmic rules, findings in tables. Custom per-NBFC rules and policy overrides. |
-| 12 | Tenancy | Isolation by schema at extract. Everything after extract carries `tenant_id` / `snapshot_id`. |
-| 13 | Exceptions | Exclusions and overrides are joined into the extract in SQL (`NOT EXISTS`, `COALESCE(override, source)`), frozen per snapshot, and confirmed before generating. The LMS schema must be on the app's MySQL server. |
+| 12 | Tenancy | One NBFC per deployment (own AWS account per customer). Isolation by schema at extract; everything after carries `tenant_id` / `snapshot_id`. The API applies the deployment's tenant to every call and refuses other tenants' requests and snapshots; scheduled runs cover only it. |
+| 13 | Exceptions | Exclusions and overrides are joined into the extract in SQL (`NOT EXISTS`, `COALESCE(override, source)`), frozen per snapshot, and confirmed before generating. The LMS schema must be on the app's MySQL server: the app tables live on the customer's LMS RDS instance. |
 | 14 | Validate first, always | No direct file generation. New requests and scheduled runs are validations; files come only from a validated snapshot. |
 | 15 | Request flow | Request → Exceptions → Validation → Files (§5). Exceptions are locked on submit; more exceptions means a new request. |
 | 16 | File storage | Generated files and exception CSVs go to S3 (`s3://<bucket>/<prefix>/<tenant>/<batch>/<file>`), written conditionally (never overwritten), SSE encrypted. Downloads use short-lived presigned links. |
 | 17 | Hosting | Serverless on AWS (§3): static frontend, Cognito sign-in, HTTP API + Lambda, worker Lambdas started by S3 job objects, EventBridge Scheduler. No servers to patch. |
-| 18 | UI | Plain HTML + Alpine.js, no build step and no CDN; sidebar + top bar layout with a global NBFC selector. |
+| 18 | UI | Plain HTML + Alpine.js, no build step and no CDN; sidebar + top bar layout showing the deployment's NBFC (no selector). |
 | 19 | Sign-in | Cognito user pool with admin-created users (TOTP MFA optional). A company identity provider can be federated later as a Cognito setting. The app keeps who may use it (and admins) in `app_user`, by e-mail. |
 
 ## 3. AWS architecture
@@ -167,16 +170,16 @@ Pipeline tables (`extract_snapshot`, `c_*`, `validation_*`, `record_outcome`) ar
 **Layout:**
 - **Sidebar:** Main (Dashboard, New request, Exceptions), Reports (Submission tracker, Files, Audit), Admin (Rules & policies; NBFCs & bureaus later).
 - **Sidebar footer:** queue status ("Processing normally" or "Runs waiting …") and the signed-in user.
-- **Top bar:** breadcrumb, a global **NBFC selector** (remembered per browser), **+ New request**.
+- **Top bar:** breadcrumb, the deployment's **NBFC name**, **+ New request**.
 
 | Page | Content |
 |---|---|
-| Dashboard | Period filter. Request KPI cards by stage (each opens the tracker filtered), data KPIs (records validated, acceptance rate, loans excluded / overridden, files, records submitted), needs attention, NBFC status (latest request per NBFC), bureaus, recent requests |
-| New request | NBFC, as-of date, types, cycle → creates the draft and opens its exceptions step |
+| Dashboard | Period filter. Request KPI cards by stage (each opens the tracker filtered), data KPIs (records validated, acceptance rate, loans excluded / overridden, files, records submitted), needs attention, bureaus, recent requests |
+| New request | As-of date, types, cycle (the NBFC is the deployment's) → creates the draft and opens its exceptions step |
 | Exceptions | Drafts waiting for exceptions, or one request's step: exclude / override forms, the list with status (*Will apply / Applied / Not found / Removed*, old → new), Submit, Discard |
 | Submission tracker | All runs (status, mode, bureau, date filters, paging) or requests by stage |
-| Request | Rows and statuses (refreshing while active), retry / cancel, snapshot summary and adjustments, generate files with the confirmation, downloads |
-| Findings | Summary by rule, filters, paging, CSV export, Exclude loan / Override… |
+| Request | Rows and statuses (refreshing while active), retry / cancel, snapshot record KPIs and issues by category (as on Findings) and adjustments, generate files with the confirmation, downloads |
+| Findings | Record KPIs (checked, will be reported, not reported, reported with gaps), issues by business category with plain-language effect (rules marked `expected:` in the pack show as "Spec rule (no action)" and are not gaps), filters (category, issue, effect), paging, CSV export, Exclude loan / Override… |
 | Files | Generated files with bureau / period filters and downloads |
 | Audit | Every action, filterable by action, user and target |
 | Rules & policies | Rule catalogue with its SQL / Python check; per NBFC: on/off and outcome (with a reason), rule parameters, custom rules built from a form (preview on the latest validation) |
@@ -201,7 +204,7 @@ Pipeline tables (`extract_snapshot`, `c_*`, `validation_*`, `record_outcome`) ar
 
 ## 8. Cost
 
-At about 10 uses a month, the stack costs **about $1 a month**, excluding the existing RDS and files bucket:
+At about 10 uses a month, the stack costs **about $1 a month per customer account**, excluding the existing RDS and files bucket:
 - Lambda, CloudFront, Scheduler, SQS, SNS, CloudWatch alarms and Cognito (under 10,000 monthly users) are within their always-free allowances.
 - The HTTP API and S3 cost fractions of a cent after their first-year free tier.
 - There are no hourly charges: no NAT, interface endpoints, load balancer or servers.

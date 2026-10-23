@@ -12,6 +12,7 @@ from sqlalchemy import Engine, delete, select, update
 from submissions.canonical.definition import canonical_model
 from submissions.db import utcnow
 from submissions.enums import Outcome, SubmissionType
+from submissions.validation.results import CATEGORIES
 from submissions.validation.tables import validation_policy, validation_rule
 
 PACKS_DIR = Path(__file__).with_name("packs")
@@ -43,6 +44,8 @@ class Rule:
     python: str | None = None
     cascade: bool = False
     enabled: bool = True
+    category: str | None = None       # business category override (results.CATEGORIES); default from the rule ID
+    expected: bool = False            # the spec's normal handling, not a data problem: no action, not a "gap"
 
     @property
     def kind(self) -> str:
@@ -63,6 +66,11 @@ def _check_rule(rule: Rule) -> Rule:
     return rule
 
 
+def _label(column: str) -> str:
+    """Readable name of a canonical column for generated messages: birth_date -> Birth date."""
+    return column.replace("_", " ").capitalize()
+
+
 def _generated_rules(pack: str, cfg: dict, segments: dict) -> list[Rule]:
     model, rules = canonical_model(), []
     for entity, edef in model.entities.items():
@@ -74,14 +82,14 @@ def _generated_rules(pack: str, cfg: dict, segments: dict) -> list[Rule]:
                     else f"x.{col.name} IS NULL"
                 rules.append(Rule(
                     rule_id=f"UCRF.REQUIRED.{entity}.{col.name}", outcome=Outcome(cfg["required_outcome"][entity]),
-                    message=f"{entity}.{col.name} is required",
+                    message=f"{_label(col.name)} is required",
                     sql=(f"SELECT x.row_id, {acct} AS account_key, {party} AS party_key, NULL AS value\n"
                          f"FROM {edef.table} x WHERE x.snapshot_id = :snapshot_id AND {blank}"), **base))
             if col.code_list:
                 outcome = cfg.get("enum_outcome", {}).get(f"{entity}.{col.name}", cfg["enum_outcome_default"])
                 rules.append(Rule(
                     rule_id=f"UCRF.ENUM.{entity}.{col.name}", outcome=Outcome(outcome),
-                    message=f"{entity}.{col.name} is not a valid {col.code_list} code",
+                    message=f"{_label(col.name)} is not a valid code ({col.code_list})",
                     sql=(f"SELECT x.row_id, {acct} AS account_key, {party} AS party_key, x.{col.name} AS value\n"
                          f"FROM {edef.table} x WHERE x.snapshot_id = :snapshot_id AND x.{col.name} IS NOT NULL\n"
                          f"  AND x.{col.name} NOT IN (SELECT r.code FROM ref_code r WHERE r.code_list = "
@@ -94,19 +102,33 @@ def load_pack(path: Path) -> list[Rule]:
     pack, segments = raw["pack"], raw.get("segments", {})
     rules = _generated_rules(pack, raw["generated"], segments)
     for spec in raw["rules"]:
-        unknown = set(spec) - {"id", "entity", "field", "outcome", "message", "sql", "python", "cascade"}
+        unknown = set(spec) - {"id", "entity", "field", "outcome", "message", "sql", "python", "cascade", "category",
+                                 "expected"}
         if unknown:
             raise RuleDefinitionError(f"{spec.get('id')}: unknown keys {sorted(unknown)}")
         if not str(spec["id"]).startswith(BUILTIN_PREFIX):
             raise RuleDefinitionError(f"{spec['id']}: built-in rule ids start with {BUILTIN_PREFIX}")
+        if spec.get("category") is not None and spec["category"] not in CATEGORIES:
+            raise RuleDefinitionError(f"{spec['id']}: unknown category {spec['category']!r} ({', '.join(CATEGORIES)})")
         rules.append(Rule(rule_id=spec["id"], source=pack, entity=spec["entity"], outcome=Outcome(spec["outcome"]),
                           message=spec["message"], segment=segments.get(spec["entity"]), field=spec.get("field"),
-                          sql=spec.get("sql"), python=spec.get("python"), cascade=bool(spec.get("cascade"))))
+                          sql=spec.get("sql"), python=spec.get("python"), cascade=bool(spec.get("cascade")),
+                          category=spec.get("category"), expected=bool(spec.get("expected"))))
     ids = [r.rule_id for r in rules]
     duplicates = sorted({i for i in ids if ids.count(i) > 1})
     if duplicates:
         raise RuleDefinitionError(f"{path.name}: duplicate rule ids {duplicates}")
     return [_check_rule(r) for r in rules]
+
+
+def report_hints(submission_type: SubmissionType | str) -> tuple[dict[str, str], frozenset[str]]:
+    """For the findings report: (rule_id -> `category:` override, rule IDs marked `expected:`) of the built-in pack."""
+    try:
+        rules = builtin_rules(submission_type)
+    except RuleDefinitionError:               # no pack for this type yet
+        return {}, frozenset()
+    return ({r.rule_id: r.category for r in rules if r.category},
+            frozenset(r.rule_id for r in rules if r.expected))
 
 
 @cache

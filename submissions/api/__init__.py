@@ -35,6 +35,7 @@ class ApiServices:
     bureaus: BureauRepository
     snapshots: SnapshotRepository
     adjustments: AdjustmentRepository
+    tenant: str | None = None        # the one NBFC this deployment serves (Settings.tenant); None = all
 
 
 def create_app(settings: Settings | None = None, engine: Engine | None = None, store: FileStore | None = None,
@@ -51,7 +52,8 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None, s
     app.extensions["submissions"] = ApiServices(
         engine=engine, store=store or make_store(settings), dispatcher=dispatcher or make_dispatcher(settings),
         exports=exports, requests=RequestRepository(engine), tenants=TenantRepository(engine),
-        bureaus=BureauRepository(engine), snapshots=SnapshotRepository(engine), adjustments=AdjustmentRepository(engine))
+        bureaus=BureauRepository(engine), snapshots=SnapshotRepository(engine), adjustments=AdjustmentRepository(engine),
+        tenant=settings.tenant)
 
     from submissions.api import auth, views
 

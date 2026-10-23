@@ -1,6 +1,8 @@
 # Bureau Submissions
 
-Generates credit bureau submission files (UCRF consumer now; commercial and NeSL later) for about 50 NBFCs. The steps:
+Generates credit bureau submission files (UCRF consumer now; commercial and NeSL later) for one NBFC. Each customer
+has their own AWS account with their LMS on RDS; this app is deployed alongside it (same `bureau-submissions` stack,
+app tables on the same RDS server) and serves that one NBFC (`SUBMISSIONS_TENANT`). The steps:
 1. A user creates a request.
 2. They add exceptions (excluded loans, overrides), if any.
 3. They validate the request.
@@ -34,7 +36,7 @@ Copy-Item env.example.ps1 env.ps1      # fill in the database URL; env.ps1 is no
 
 ```powershell
 .\.venv\Scripts\python -m submissions.migrate                           # applies migrations/NNN_*.sql once each
-.\.venv\Scripts\python -m submissions.tenants.seed                      # mock tenants nbfc_001, nbfc_002
+.\.venv\Scripts\python -m submissions.tenants.seed                      # mock tenants nbfc_001, nbfc_002 (two layouts; a deployment uses one)
 .\.venv\Scripts\python -m submissions.bureaus.seed nbfc_001 nbfc_002   # PLACEHOLDER bureau profiles per tenant
 ```
 
@@ -47,7 +49,8 @@ Mock LMS data: `mock_data/mock_lms.sql` creates the schemas `nbfc_001` (base lay
 
 ## Local development
 
-The API serves the pages too when `SUBMISSIONS_FRONTEND_DIR=frontend`. Locally there is no sign-in
+The API serves the pages too when `SUBMISSIONS_FRONTEND_DIR=frontend`. `SUBMISSIONS_TENANT` picks the NBFC
+(`nbfc_001` base layout, `nbfc_002` customised layout). Locally there is no sign-in
 (`SUBMISSIONS_AUTH=none`). A polling worker runs the submitted requests; on AWS, worker Lambdas do this.
 
 ```powershell

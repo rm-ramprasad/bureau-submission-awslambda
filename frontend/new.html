@@ -24,15 +24,6 @@
   <form class="panel" x-show="$store.app.meta" x-cloak @submit.prevent="create()">
     <div class="row">
       <div>
-        <label for="tenant_id">NBFC</label>
-        <select id="tenant_id" x-model="form.tenant_id" required>
-          <option value="">Select…</option>
-          <template x-for="t in ($store.app.meta?.tenants || []).filter((t) => t.is_active)" :key="t.tenant_id">
-            <option :value="t.tenant_id" x-text="`${t.display_name} (${t.tenant_id})`" :selected="t.tenant_id === form.tenant_id"></option>
-          </template>
-        </select>
-      </div>
-      <div>
         <label for="as_of_date">As-of date</label>
         <input type="date" id="as_of_date" x-model="form.as_of_date" required>
       </div>
