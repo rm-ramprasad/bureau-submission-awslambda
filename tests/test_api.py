@@ -61,7 +61,7 @@ def test_meta_lists_choices(api):
     status, meta = api.get("/meta")
     assert status == 200 and {t["tenant_id"] for t in meta["tenants"]} == {"nbfc_001", "nbfc_002"}
     types = {t["value"]: t["enabled"] for t in meta["submission_types"]}
-    assert types == {"CONSUMER": True, "COMMERCIAL": False, "NESL": False}
+    assert types == {"CONSUMER": True, "COMMERCIAL": True, "NESL": False}          # nbfc_001 has both mappings
     assert {o["value"] for o in meta["override_fields"]} >= {"days_past_due", "settlement_amount"}
     assert meta["default_as_of"].endswith(("-28", "-29", "-30", "-31"))
 
@@ -109,7 +109,7 @@ def test_user_header_is_recorded_without_sign_in(api, requests_repo):
     (dict(tenant_id="nbfc_999"), "Select an active NBFC"),
     (dict(as_of_date="2099-01-01"), "future"),
     (dict(as_of_date="not-a-date"), "YYYY-MM-DD"),
-    (dict(submission_types=["NESL"]), "Not available yet"),
+    (dict(submission_types=["NESL"]), "Not set up for this NBFC"),
     (dict(submission_types=[]), "at least one submission type"),
 ])
 def test_invalid_requests_are_refused(api, fields, message):

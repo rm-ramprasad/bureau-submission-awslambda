@@ -1,8 +1,9 @@
 # Plan: Commercial UCRF + per-type modules + reference data in the database
 
 Status as of 24-10-2026. Phases 1, 1b, 1c (items 1, 4, 6) and 2 merged into main; migrations 012-014 executed.
-Phase 3 merged. Phase 4 (pipe-delimited engine + commercial layout) done on branch `phase-4-commercial-file` (no DDL).
-Consumer golden files byte-identical throughout. Next: phase 5 (register the commercial pipeline).
+Phases 3 and 4 merged. Phase 5 (commercial pipeline registered: COMMERCIAL offered in the app) done on branch
+`phase-5-commercial-pipeline` (no DDL). Consumer golden files byte-identical throughout. Commercial is complete
+end to end; remaining: the admin page for reference data (1c items 2, 3, 5) and the ROADMAP open questions.
 Spec: [docs/specs/Commercial_UCRF_V3_10.md](../specs/Commercial_UCRF_V3_10.md).
 
 ## Decisions (agreed)
@@ -45,7 +46,7 @@ Safeguards to build with DB-master:
 | 2 | Commercial model: extend `c_party` / `c_party_address` / `c_account`; new `c_relationship`, `c_guarantor`, `c_security`, `c_cheque_dishonour`; neutral product/status taxonomy (union of both specs); commercial mock data + `clients/_base/commercial.yaml` | Yes (014) | **Done** (branch `phase-2-commercial-model`), see below |
 | 3 | `types/commercial/rules.yaml` + cascade (record = facility × borrower via `c_account_holder`; borrower reject rejects all its facilities; RS optional for credit type 9026) | Seed rows | **Done** (branch `phase-3-commercial-rules`), see below |
 | 4 | Generic pipe-delimited engine (`formats/delimited/`) + `types/commercial/layout.yaml`; golden tests; TS counts; CRLF + trailing pipe | No | **Done** (branch `phase-4-commercial-file`), see below |
-| 5 | Register commercial pipeline, bureau profiles (placeholder member IDs, `Commercial-<cycle>…` names), report categories | Seed rows | Not started |
+| 5 | Register commercial pipeline, bureau profiles (placeholder member IDs, `Commercial-<cycle>…` names), report categories | Seed rows | **Done** (branch `phase-5-commercial-pipeline`), see below |
 
 ## Phase 1b: what was built (24-10-2026)
 
@@ -146,6 +147,19 @@ Safeguards to build with DB-master:
 - Tests: `tests/test_commercial_golden.py` (field counts, segment order per Table 2, TS counts, trailing `|` + CRLF,
   rejected / dropped data left out, codes) and golden files `tests/golden/commercial_*.txt`.
 
+## Phase 5: what was built (24-10-2026)
+
+- `submissions/pipeline/mapped.py`: `MappedPipeline` (mapping -> snapshot -> rules; file via the type's writer;
+  exceptions CSV). Consumer and commercial `pipeline.py` only supply their writer. Registry in `SubmissionType` order.
+- `available_types(tenant)`: a type is offered when it has a pipeline **and** the NBFC has
+  `clients/<tenant>/<type>.yaml`. Used by `/meta` (request page, Rules & policies type selector), request creation
+  and scheduled runs (an NBFC without `commercial.yaml` gets consumer only; none at all = skipped).
+- Bureau profiles: `placeholder_profiles` also seeds COMMERCIAL per bureau (member IDs `CIBC000001` ..., no header
+  tag, file name `Commercial-{cycle}-{as_of:%d%m%Y}-{member_id}-{created:%H%M%S}.txt`, spec 4.3). New file-name field
+  `{cycle}` (AH when a run has no cycle).
+- Tests: `tests/test_commercial_pipeline.py` (validate both types in one batch -> two snapshots; generate commercial
+  for two bureaus; per-NBFC availability), plus updated API / schedule / seed tests.
+
 ## Next steps
 
 1. ~~Commit 1b~~ done, merged into main; migration 012 executed.
@@ -154,9 +168,9 @@ Safeguards to build with DB-master:
 4. ~~Phase 2~~ done 24-10-2026 (branch `phase-2-commercial-model`, migration 014).
 5. ~~Phase 3~~ done 24-10-2026 (branch `phase-3-commercial-rules`).
 6. ~~Phase 4~~ done 24-10-2026 (branch `phase-4-commercial-file`).
-7. **Next:** phase 5: `types/commercial/pipeline.py` (enables COMMERCIAL in the UI), commercial bureau profiles
-   (placeholder member IDs, `Commercial-<cycle>...` file names), report categories, worker / API tests. Then the admin
-   page (1c items 2, 3, 5).
+7. ~~Phase 5~~ done 24-10-2026 (branch `phase-5-commercial-pipeline`).
+8. **Next:** admin page for reference data (1c items 2, 3, 5); answers to the ROADMAP commercial questions; real
+   commercial member IDs per bureau (`bureau_profile`).
 
 ## Deploy notes (when 1b ships)
 

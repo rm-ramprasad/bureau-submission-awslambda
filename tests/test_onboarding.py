@@ -70,7 +70,7 @@ def test_register_tenant_creates_mapping_from_template(engine, tenant_repo, base
     stored = tenant_repo.get("nbfc_017")
     assert (stored.source_schema, stored.mapping_path) == ("acme_lms", "clients/nbfc_017")
     assert set(load_mapping(path).entities) >= {"party", "account", "account_holder"}   # template is a valid mapping
-    assert len(BureauRepository(engine).list("nbfc_017")) == 4
+    assert len(BureauRepository(engine).list("nbfc_017")) == 8   # 4 bureaus x 2 types
 
 
 def test_register_tenant_never_overwrites_an_edited_mapping(engine, base_dir):

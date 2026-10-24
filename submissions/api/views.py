@@ -29,7 +29,7 @@ from submissions.enums import (
     SubmissionType,
 )
 from submissions.ops import audit
-from submissions.pipeline import enabled_types
+from submissions.pipeline import available_types, enabled_types
 from submissions.requests import (
     DuplicateActiveRequestError, InvalidTransitionError, RequestNotFoundError, RequestValidationError, stages,
 )
@@ -161,11 +161,12 @@ def session_end():
 def meta():
     """Choices the pages need: NBFCs, submission types, bureaus, cycles, stages, periods, outcomes, fields."""
     s = svc()
+    offered = enabled_types() if not s.tenant else available_types(s.tenants.get(s.tenant))
     return jsonify(
         tenant=s.tenant,
         tenants=[{"tenant_id": t.tenant_id, "display_name": t.display_name, "is_active": t.is_active}
                  for t in s.tenants.list(active_only=False) if not s.tenant or t.tenant_id == s.tenant],
-        submission_types=[{"value": t.value, "label": t.value.title(), "enabled": t in enabled_types()}
+        submission_types=[{"value": t.value, "label": t.value.title(), "enabled": t in offered}
                           for t in SubmissionType],
         bureaus=options(BureauCode), cycles=options(ReportingCycle), stages=options(Stage), periods=options(Period),
         statuses=options(BatchStatus), modes=options(RunMode), outcomes=results.OUTCOME_ORDER,
@@ -271,9 +272,9 @@ def create_request():
         fail("Select an active NBFC.")
     as_of = parse_date(b.get("as_of_date"), "As-of date")
     try:
-        not_enabled = [t for t in types if SubmissionType(t) not in enabled_types()]
+        not_enabled = [t for t in types if SubmissionType(t) not in available_types(tenant)]
         if not_enabled:
-            raise RequestValidationError(f"Not available yet: {', '.join(not_enabled)}")
+            raise RequestValidationError(f"Not set up for this NBFC: {', '.join(not_enabled)} (no mapping file)")
         batch_id = s.requests.create_batch(tenant.tenant_id, as_of, RunMode.VALIDATE, types, (),
                                            b.get("reporting_cycle") or None, current_user(), draft=True)
     except (RequestValidationError, DuplicateActiveRequestError) as exc:

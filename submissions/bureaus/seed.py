@@ -22,6 +22,8 @@ from submissions.logging_config import configure_logging
 log = logging.getLogger(__name__)
 
 UCRF_FILE_NAME = "{member_id}-{created:%d%m%Y}-{created:%H%M%S}.txt"
+# Commercial 4.3: Commercial-<DL/W1/W2/W3/ME...>-<date reported>-<internal reference>
+COMMERCIAL_FILE_NAME = "Commercial-{cycle}-{as_of:%d%m%Y}-{member_id}-{created:%H%M%S}.txt"
 
 # bureau -> (display name, member-id prefix, header segment tag)
 PLACEHOLDERS = {
@@ -33,10 +35,15 @@ PLACEHOLDERS = {
 
 
 def placeholder_profiles(tenant_id: str, tenant_no: int, short_name: str) -> list[BureauProfile]:
-    """Consumer profiles for one tenant; member IDs like CIB0000017 (10 chars, TL.01 length)."""
-    return [BureauProfile(tenant_id, bureau, T.CONSUMER, name, f"{prefix}{tenant_no:07d}", short_name[:16], tag,
-                          UCRF_FILE_NAME)
-            for bureau, (name, prefix, tag) in PLACEHOLDERS.items()]
+    """Consumer and commercial profiles for one tenant; member IDs like CIB0000017 / CIBC000017 (10 chars: TL.01,
+    commercial HD.2). Commercial files have no header segment tag."""
+    consumer = [BureauProfile(tenant_id, bureau, T.CONSUMER, name, f"{prefix}{tenant_no:07d}", short_name[:16], tag,
+                              UCRF_FILE_NAME)
+                for bureau, (name, prefix, tag) in PLACEHOLDERS.items()]
+    commercial = [BureauProfile(tenant_id, bureau, T.COMMERCIAL, f"{name} Commercial", f"{prefix}C{tenant_no:06d}",
+                                short_name[:16], "", COMMERCIAL_FILE_NAME)
+                  for bureau, (name, prefix, _) in PLACEHOLDERS.items()]
+    return consumer + commercial
 
 
 def seed(repo: BureauRepository, tenant_ids: list[str]) -> int:

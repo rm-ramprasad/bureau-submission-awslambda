@@ -124,7 +124,7 @@ def jobs_env(engine, monkeypatch, tmp_path):
 def test_jobs_schedule_creates_and_dispatches_validations(jobs_env, requests_repo):
     result = L.jobs({"job": "schedule", "cycle": "ME", "as_of": "2026-09-30"}, None)
     assert set(result["created"]) == {"nbfc_001"}                  # only the deployment's NBFC, not nbfc_002
-    assert len(jobs_env) == 1
+    assert len(jobs_env) == 2                                       # consumer and commercial
     assert L.jobs({"job": "schedule", "cycle": "ME", "as_of": "2026-09-30"}, None)["created"] == {}   # no duplicates
 
 

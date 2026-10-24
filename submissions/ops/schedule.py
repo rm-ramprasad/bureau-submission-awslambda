@@ -17,7 +17,7 @@ from sqlalchemy import Engine
 
 from submissions.enums import ReportingCycle, RunMode
 from submissions.ops import audit
-from submissions.pipeline import enabled_types
+from submissions.pipeline import available_types
 from submissions.requests import DuplicateActiveRequestError, RequestRepository, RequestValidationError
 from submissions.tenants import TenantRepository
 
@@ -51,9 +51,12 @@ def schedule_runs(engine: Engine, cycle: ReportingCycle | str, *, today: date | 
     cycle = ReportingCycle(cycle)
     as_of = as_of or default_as_of(cycle, today or date.today())
     requests, result = RequestRepository(engine), ScheduleResult()
-    types = enabled_types()                          # every submission type that has a pipeline
     for tenant in TenantRepository(engine).list(active_only=True):
         if tenant_ids and tenant.tenant_id not in tenant_ids:
+            continue
+        types = available_types(tenant)              # types with a pipeline that this NBFC has a mapping for
+        if not types:
+            result.skipped[tenant.tenant_id] = "no submission type is set up (no mapping file)"
             continue
         try:
             batch = requests.create_batch(tenant.tenant_id, as_of, RunMode.VALIDATE, types, (), cycle,

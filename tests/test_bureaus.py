@@ -11,16 +11,21 @@ from submissions.enums import BureauCode as B, SubmissionType as T
 NBFC1, NBFC2 = "nbfc_001", "nbfc_002"
 
 
-def test_seed_loads_four_bureaus_per_tenant(bureau_repo):
-    assert seed(bureau_repo, [NBFC1, NBFC2]) == 8
+def test_seed_loads_four_bureaus_per_tenant_and_type(bureau_repo):
+    assert seed(bureau_repo, [NBFC1, NBFC2]) == 16
     assert {p.bureau_code for p in bureau_repo.list(NBFC1, T.CONSUMER)} == set(B)
-    assert bureau_repo.list(NBFC1, T.COMMERCIAL) == []
+    commercial = bureau_repo.list(NBFC1, T.COMMERCIAL)
+    assert {p.bureau_code for p in commercial} == set(B)
+    cibil = bureau_repo.get(NBFC1, "CIBIL", "COMMERCIAL")
+    assert (cibil.member_id, cibil.header_segment_tag) == ("CIBC000001", "")
+    assert cibil.file_name(datetime(2026, 10, 5, 9, 30), date(2026, 9, 30), "ME") ==         "Commercial-ME-30092026-CIBC000001-093000.txt"
+    assert cibil.file_name(datetime(2026, 10, 5, 9, 30), date(2026, 9, 30)).startswith("Commercial-AH-")
 
 
 def test_seed_is_rerunnable(bureau_repo):
     seed(bureau_repo, [NBFC1])
     seed(bureau_repo, [NBFC1])
-    assert len(bureau_repo.list(NBFC1)) == 4
+    assert len(bureau_repo.list(NBFC1)) == 8
 
 
 def test_member_ids_are_per_tenant(bureau_repo):

@@ -10,7 +10,9 @@ Run every command from the project root with `SUBMISSIONS_DATABASE_URL` set
 .\.venv\Scripts\python -m submissions.onboarding.new_tenant --tenant nbfc_017 --name "Acme Finance" --schema acme_lms
 ```
 
-- Creates the `tenant` row and `clients/nbfc_017/consumer.yaml` from `clients/_template/`.
+- Creates the `tenant` row and one mapping file per submission type (`clients/nbfc_017/consumer.yaml`, `commercial.yaml`) from `clients/_template/`.
+  A type is offered for the NBFC only while its mapping file exists: delete `commercial.yaml` for an NBFC without a commercial portfolio
+  (the same steps below apply to `commercial.yaml`, against the NBFC's business tables).
 - It never overwrites an existing mapping file.
 - Add `--placeholder-bureaus` to get dummy bureau profiles for testing. Real member IDs come in step 6.
 - Use `--strategy insert_select` only if our app tables are on the same MySQL server as the NBFC schema.

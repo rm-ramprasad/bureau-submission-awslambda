@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from submissions.bureaus.seed import seed as seed_bureaus
 from submissions.canonical.schema import ENTITY_TABLES
-from submissions.enums import ReportingCycle as C, RequestStatus as S, RunMode as M, SnapshotStatus
+from submissions.enums import ReportingCycle as C, RequestStatus as S, RunMode as M, SnapshotStatus, SubmissionType as T
 from submissions.ops import audit
 from submissions.ops.recovery import RecoverySettings, recover
 from submissions.ops.retention import purge
@@ -166,8 +166,8 @@ def test_schedule_validate_for_all_active_tenants(engine, requests_repo, tenant_
     result = schedule_runs(engine, "ME", today=date(2026, 10, 21))
     assert set(result.created) == {"nbfc_001", "nbfc_002"} and result.skipped == {}
     rows = requests_repo.list_batch(result.created["nbfc_001"])
-    assert [(r.as_of_date, r.reporting_cycle.value, r.requested_by, r.run_mode) for r in rows] == [
-        (AS_OF, "ME", "scheduler", M.VALIDATE)]
+    assert {(r.submission_type, r.as_of_date, r.reporting_cycle.value, r.requested_by, r.run_mode) for r in rows} == {
+        (T.CONSUMER, AS_OF, "ME", "scheduler", M.VALIDATE), (T.COMMERCIAL, AS_OF, "ME", "scheduler", M.VALIDATE)}
     again = schedule_runs(engine, "ME", today=date(2026, 10, 21))     # still pending -> skipped, not duplicated
     assert again.created == {} and "Already open" in again.skipped["nbfc_001"]
     tenant_repo.set_active("nbfc_002", False)

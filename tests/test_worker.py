@@ -30,8 +30,8 @@ def snapshot_count(engine) -> int:
         return conn.execute(select(func.count()).select_from(extract_snapshot)).scalar()
 
 
-def test_only_consumer_is_enabled():
-    assert enabled_types() == [T.CONSUMER]
+def test_consumer_and_commercial_are_enabled():
+    assert enabled_types() == [T.CONSUMER, T.COMMERCIAL]
 
 
 def test_validate_run_end_to_end(worker, requests_repo, engine):
