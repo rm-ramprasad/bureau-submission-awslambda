@@ -220,7 +220,9 @@ The file format is **data, not code**. A layout YAML describes it, and a generic
 2. Run the tests. `tests/test_ucrf_golden.py` compares the generated files byte for byte with `tests/golden/`.
 3. If the change is intended, review the difference, then regenerate the golden files (`REGENERATE_GOLDEN=1`).
 
-A new algorithm is a new named formatter, which any layout can then use. Commercial and NeSL are not TUDF; they will get their own engines.
+A new algorithm is a new named formatter, which any layout can then use.
+
+**Commercial** is pipe-delimited, not TUDF: `types/commercial/layout.yaml` is rendered by `submissions/formats/delimited/` (header; per borrower and branch a BS line with its AS / RS lines; per accepted facility a CR line with its GS / SS / CD lines; TS with the BS / CR counts; every line ends with `|` and CRLF). Fields are positional and use the same keys as TUDF fields, plus `const`, `blank`, `if_present`; golden files: `tests/test_commercial_golden.py`.
 
 ## 8. Onboarding an NBFC
 

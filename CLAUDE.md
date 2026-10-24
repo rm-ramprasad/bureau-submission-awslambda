@@ -59,9 +59,9 @@ Migration/table parity against real MySQL: set `SUBMISSIONS_TEST_MYSQL_URL` to a
   must not start with a built-in prefix); `validation_policy` overrides enabled/outcome per tenant. SQL rules must use
   `:snapshot_id`. The pack's cascade computes `record_outcome` (consumer: account × holder; commercial: facility ×
   borrower, a borrower reject rejects all its facilities).
-- **Formatter:** file format is data — `submissions/types/consumer/layout.yaml` rendered by the generic
-  TUDF engine in `submissions/formats/tudf/`. Bureau files differ only by member ID, header tag and file name (from `bureau_profile`).
-  `tests/test_ucrf_golden.py` compares output byte-for-byte with `tests/golden/`.
+- **Formatter:** file format is data — `submissions/types/<type>/layout.yaml` rendered by a generic engine: consumer
+  by the TUDF engine (`submissions/formats/tudf/`), commercial by the pipe-delimited one (`submissions/formats/delimited/`). Bureau files differ only by member ID, header tag and file name (from `bureau_profile`).
+  `tests/test_ucrf_golden.py` and `tests/test_commercial_golden.py` compare output byte-for-byte with `tests/golden/`.
 - **Tenancy:** isolation by schema at extract; everything after carries `tenant_id` / `snapshot_id` and must be scoped by it.
 - **One NBFC per deployment:** each customer gets their own AWS account with their LMS on RDS; the same `bureau-submissions`
   stack is deployed alongside it, with the app tables on that same RDS server. `SUBMISSIONS_TENANT` (stack parameter

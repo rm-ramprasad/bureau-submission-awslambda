@@ -1,8 +1,8 @@
 # Plan: Commercial UCRF + per-type modules + reference data in the database
 
 Status as of 24-10-2026. Phases 1, 1b, 1c (items 1, 4, 6) and 2 merged into main; migrations 012-014 executed.
-Phase 3 (commercial rules) done on branch `phase-3-commercial-rules` (no DDL). Consumer golden files byte-identical
-throughout. Next: phase 4 (pipe-delimited engine + commercial layout).
+Phase 3 merged. Phase 4 (pipe-delimited engine + commercial layout) done on branch `phase-4-commercial-file` (no DDL).
+Consumer golden files byte-identical throughout. Next: phase 5 (register the commercial pipeline).
 Spec: [docs/specs/Commercial_UCRF_V3_10.md](../specs/Commercial_UCRF_V3_10.md).
 
 ## Decisions (agreed)
@@ -44,7 +44,7 @@ Safeguards to build with DB-master:
 | 1c | DB-master safeguards 1–6 above | Yes (snapshot translation copy, maybe audit fields) | **1, 4, 6 done** (seed insert-missing; freeze per snapshot, migration 013; PIN ranges from the DB, salutation parameter). Left: 2, 3, 5 (admin page) after commercial |
 | 2 | Commercial model: extend `c_party` / `c_party_address` / `c_account`; new `c_relationship`, `c_guarantor`, `c_security`, `c_cheque_dishonour`; neutral product/status taxonomy (union of both specs); commercial mock data + `clients/_base/commercial.yaml` | Yes (014) | **Done** (branch `phase-2-commercial-model`), see below |
 | 3 | `types/commercial/rules.yaml` + cascade (record = facility × borrower via `c_account_holder`; borrower reject rejects all its facilities; RS optional for credit type 9026) | Seed rows | **Done** (branch `phase-3-commercial-rules`), see below |
-| 4 | Generic pipe-delimited engine (`formats/delimited/`) + `types/commercial/layout.yaml`; golden tests; TS counts; CRLF + trailing pipe | No | Not started |
+| 4 | Generic pipe-delimited engine (`formats/delimited/`) + `types/commercial/layout.yaml`; golden tests; TS counts; CRLF + trailing pipe | No | **Done** (branch `phase-4-commercial-file`), see below |
 | 5 | Register commercial pipeline, bureau profiles (placeholder member IDs, `Commercial-<cycle>…` names), report categories | Seed rows | Not started |
 
 ## Phase 1b: what was built (24-10-2026)
@@ -128,6 +128,24 @@ Safeguards to build with DB-master:
 - Tests: `tests/test_commercial_rules.py` runs extract + validation on both mock schemas and checks every scenario's
   expected outcome and rule; clean scenarios have no REJECT findings except the spec's expected handling.
 
+## Phase 4: what was built (24-10-2026)
+
+- `submissions/formats/delimited/`: generic engine. Layout = header line, a group per borrower (and split value, here
+  the member branch: BS once per borrower per branch) with its child lines (AS, RS), each accepted record's line (CR)
+  with its child lines (GS, SS, CD), trailer. Positional fields 2..n with the TUDF field keys (`source`, `translate`,
+  `when`, `alternatives`, `max_len` ...) plus `const`, `blank`, `if_present`; each segment declares the spec's field
+  count, checked on load. Sources `id.<TYPE>` (borrower's valid identifier), `contacts.mobile|telephone|email`,
+  `count.<TAG>` (TS counts). Delimiter, `~` and `^` stripped from every value.
+- New formatters: `signed_amount_leading` (CR 11), `dpd_1nnn` (CR 15: 0 -> 1000, 999+ -> 1999), `hundredths` (RS 25).
+- `types/commercial/layout.yaml` (all 9 segments, field by field with spec numbers) and `types/commercial/file.py`
+  (`build_file(..., created_date)`: HD 4, never before the as-of date).
+- Decisions in the layout: CR 26 = special status, else 02 when `date_closed`, else 01; CR 27 = status date, else date
+  closed; CR 35 = 1 when `wilful_default_date` or a wilful status, else 0; CR 42 = 01 (normal submission); AS 12 / 14 =
+  the borrower's valid mobiles / other phones on every address; AS 16 e-mail only on the registered office address;
+  telephone area code is part of the number (AS 13 empty).
+- Tests: `tests/test_commercial_golden.py` (field counts, segment order per Table 2, TS counts, trailing `|` + CRLF,
+  rejected / dropped data left out, codes) and golden files `tests/golden/commercial_*.txt`.
+
 ## Next steps
 
 1. ~~Commit 1b~~ done, merged into main; migration 012 executed.
@@ -135,8 +153,10 @@ Safeguards to build with DB-master:
 3. ~~1c item 6~~ done 24-10-2026 (branch `reference-values-out-of-checks`, no DDL).
 4. ~~Phase 2~~ done 24-10-2026 (branch `phase-2-commercial-model`, migration 014).
 5. ~~Phase 3~~ done 24-10-2026 (branch `phase-3-commercial-rules`).
-6. **Next:** phase 4, generic pipe-delimited engine + `types/commercial/layout.yaml` (CRLF, trailing pipe, TS counts,
-   CR 15 DPD as 1nnn, CR 26 open / closed from dates, CR 35 wilful flag). Admin page (1c items 2, 3, 5) after commercial.
+6. ~~Phase 4~~ done 24-10-2026 (branch `phase-4-commercial-file`).
+7. **Next:** phase 5: `types/commercial/pipeline.py` (enables COMMERCIAL in the UI), commercial bureau profiles
+   (placeholder member IDs, `Commercial-<cycle>...` file names), report categories, worker / API tests. Then the admin
+   page (1c items 2, 3, 5).
 
 ## Deploy notes (when 1b ships)
 
