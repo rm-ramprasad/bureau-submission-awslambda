@@ -1,0 +1,4 @@
+# nbfc_002: its business tables follow the standard LMS layout (only its consumer layout is customised).
+submission_type: COMMERCIAL
+canonical_version: "1.1"
+extends: ../_base/commercial.yaml

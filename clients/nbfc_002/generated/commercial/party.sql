@@ -1,0 +1,27 @@
+-- GENERATED from the tenant mapping (version 689bebdfcd7107c4). Do not edit.
+SELECT  -- party.main
+    (b.customer_id) AS party_key,
+    (b.business_name) AS full_name,
+    NULL AS birth_date,
+    NULL AS gender,
+    NULL AS occupation,
+    NULL AS income,
+    NULL AS income_basis,
+    NULL AS income_period,
+    (b.short_name) AS short_name,
+    CASE (b.constitution) WHEN 'PVT' THEN 'PRIVATE_LIMITED' WHEN 'PUB' THEN 'PUBLIC_LIMITED' WHEN 'STAT' THEN 'STATUTORY_BODY' WHEN 'PROP' THEN 'PROPRIETORSHIP' WHEN 'PART' THEN 'PARTNERSHIP' WHEN 'TRUST' THEN 'TRUST' WHEN 'HUF' THEN 'HUF' WHEN 'COOP' THEN 'COOPERATIVE_SOCIETY' WHEN 'AOP' THEN 'ASSOCIATION_OF_PERSONS' WHEN 'GOVT' THEN 'GOVERNMENT' WHEN 'SHG' THEN 'SELF_HELP_GROUP' WHEN 'IND' THEN 'INDIVIDUAL' ELSE (b.constitution) END AS legal_constitution,
+    (b.msme_category) AS business_category,
+    CASE (b.industry) WHEN 'MFG' THEN 'MANUFACTURING' WHEN 'DIST' THEN 'DISTRIBUTION' WHEN 'WHL' THEN 'WHOLESALE' WHEN 'TRD' THEN 'TRADING' WHEN 'BRK' THEN 'BROKING' WHEN 'SVC' THEN 'SERVICE_PROVIDER' WHEN 'IMP' THEN 'IMPORTING' WHEN 'EXP' THEN 'EXPORTING' WHEN 'AGRI' THEN 'AGRICULTURE' WHEN 'DLR' THEN 'DEALERS' WHEN 'OTH' THEN 'OTHERS' ELSE (b.industry) END AS industry_type,
+    (b.incorporation_date) AS incorporation_date,
+    (b.bsr_activity_1) AS activity_class_1,
+    (b.bsr_activity_2) AS activity_class_2,
+    (b.bsr_activity_3) AS activity_class_3,
+    (b.hsn_code) AS hsn_code,
+    (b.turnover) AS sales_amount,
+    (b.turnover_fy) AS sales_year,
+    (b.employees) AS employee_count,
+    (b.rating) AS credit_rating,
+    (b.rating_agency) AS rating_agency,
+    (b.rating_date) AS rating_date,
+    (b.rating_valid_till) AS rating_expiry_date
+FROM nbfc_002.business_borrower b;

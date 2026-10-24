@@ -1,0 +1,334 @@
+# Base commercial mapping: standard LMS business tables (business_borrower, business_facility ...) -> canonical model.
+# Tenant files extend this and override only what differs. See submissions/adapters/mapping.py for the format.
+# Lookups give canonical values (submissions/canonical/model.yaml); the commercial file codes come from
+# submissions/types/commercial/codes.yaml. A client code equal to its canonical value needs no lookup entry.
+submission_type: COMMERCIAL
+canonical_version: "1.1"
+
+lookups:
+  constitution:
+    PVT: PRIVATE_LIMITED
+    PUB: PUBLIC_LIMITED
+    STAT: STATUTORY_BODY
+    PROP: PROPRIETORSHIP
+    PART: PARTNERSHIP
+    TRUST: TRUST
+    HUF: HUF
+    COOP: COOPERATIVE_SOCIETY
+    AOP: ASSOCIATION_OF_PERSONS
+    GOVT: GOVERNMENT
+    SHG: SELF_HELP_GROUP
+    IND: INDIVIDUAL
+  industry:
+    MFG: MANUFACTURING
+    DIST: DISTRIBUTION
+    WHL: WHOLESALE
+    TRD: TRADING
+    BRK: BROKING
+    SVC: SERVICE_PROVIDER
+    IMP: IMPORTING
+    EXP: EXPORTING
+    AGRI: AGRICULTURE
+    DLR: DEALERS
+    OTH: OTHERS
+  location: {REG: REGISTERED_OFFICE, BRANCH: BRANCH_OFFICE, WH: WAREHOUSE, PLANT: PLANT_FACTORY, OTH: OTHERS,
+             MORT: MORTGAGE_PROPERTY}
+  state:
+    Jammu & Kashmir: JAMMU_KASHMIR
+    Himachal Pradesh: HIMACHAL_PRADESH
+    Punjab: PUNJAB
+    Chandigarh: CHANDIGARH
+    Uttarakhand: UTTARAKHAND
+    Haryana: HARYANA
+    Delhi: DELHI
+    Rajasthan: RAJASTHAN
+    Uttar Pradesh: UTTAR_PRADESH
+    Bihar: BIHAR
+    Sikkim: SIKKIM
+    Arunachal Pradesh: ARUNACHAL_PRADESH
+    Nagaland: NAGALAND
+    Manipur: MANIPUR
+    Mizoram: MIZORAM
+    Tripura: TRIPURA
+    Meghalaya: MEGHALAYA
+    Assam: ASSAM
+    West Bengal: WEST_BENGAL
+    Jharkhand: JHARKHAND
+    Odisha: ODISHA
+    Chhattisgarh: CHHATTISGARH
+    Madhya Pradesh: MADHYA_PRADESH
+    Gujarat: GUJARAT
+    Maharashtra: MAHARASHTRA
+    Andhra Pradesh: ANDHRA_PRADESH
+    Karnataka: KARNATAKA
+    Goa: GOA
+    Kerala: KERALA
+    Tamil Nadu: TAMIL_NADU
+    Puducherry: PUDUCHERRY
+    Telangana: TELANGANA
+    Ladakh: LADAKH
+    Foreign: FOREIGN
+    APO: APO
+  country: {IN: INDIA, SG: SINGAPORE, CA: CANADA, GB: UNITED_KINGDOM, US: UNITED_STATES_OF_AMERICA,
+            AE: UNITED_ARAB_EMIRATES}
+  gender: {M: MALE, F: FEMALE, T: TRANSGENDER}
+  related_kind: {CORP_IN: INDIAN_ENTITY, IND_IN: INDIAN_INDIVIDUAL, CORP_FOREIGN: FOREIGN_ENTITY,
+                 IND_FOREIGN: FOREIGN_INDIVIDUAL}
+  relation:
+    HOLDING: HOLDING_COMPANY
+    SUBSIDIARY: SUBSIDIARY_COMPANY
+    PROMOTER_DIR: PROMOTER_DIRECTOR
+    NOMINEE_DIR: NOMINEE_DIRECTOR
+    INDEP_DIR: INDEPENDENT_DIRECTOR
+    EX_DIR: FORMER_DIRECTOR
+    OTHER_DIR: OTHER_DIRECTOR
+  product:
+    CC: CASH_CREDIT
+    OD: OVERDRAFT
+    TOD: TEMPORARY_OVERDRAFT
+    CORPCARD: CORPORATE_CREDIT_CARD
+    DL: DEMAND_LOAN
+    TL_SHORT: SHORT_TERM_LOAN
+    TL_MED: MEDIUM_TERM_LOAN
+    TL_LONG: LONG_TERM_LOAN
+    WCL: WORKING_CAPITAL_LOAN
+    BG: BANK_GUARANTEE
+    LC: LETTER_OF_CREDIT
+    CVL: COMMERCIAL_VEHICLE_LOAN
+    EQP: COMMERCIAL_EQUIPMENT_LOAN
+    FACT_R: FACTORING_WITH_RECOURSE
+    FACT_NR: FACTORING_WITHOUT_RECOURSE
+    PCL: PACKING_CREDIT
+    EBD: EXPORT_BILLS_DISCOUNTED
+    MUDRA_TL: MUDRA_TERM_LOAN
+    MUDRA_WC: MUDRA_WORKING_CAPITAL
+    BLU: BUSINESS_LOAN_UNSECURED
+  frequency: {HALFYEARLY: HALF_YEARLY, ONDEMAND: ON_DEMAND, OTHER: OTHERS}
+  asset_class: {STD: STANDARD, SUB: SUBSTANDARD, SMA0: SMA_0, SMA1: SMA_1, SMA2: SMA_2, DBT1: DOUBTFUL_1,
+                DBT2: DOUBTFUL_2, DBT3: DOUBTFUL_3, ARC: ARC_LOAN}
+  status:
+    WO: WRITTEN_OFF
+    RESTRUCT: RESTRUCTURED_LOAN
+    RESTRUCT_GOVT: RESTRUCTURED_LOAN_GOVT_MANDATED
+    RESTRUCT_CALAMITY: RESTRUCTURED_DUE_TO_NATURAL_CALAMITY
+    RESTRUCT_COVID: RESTRUCTURED_DUE_TO_COVID_19
+    ARC_SOLD: SOLD_TO_ARC
+    ARC_PURCHASED: PURCHASED_FROM_BANK
+  restructure_reason: {NPA: NON_PERFORMANCE, CALAMITY: NATURAL_CALAMITY, COVID: COVID_19, OTHER: OTHERS}
+  suit: {NONE: NO_SUIT_FILED, FILED: SUIT_FILED, TRIAL: TRIAL_IN_PROGRESS, DECREE: DECREE_ISSUED,
+         EXECUTION: DECREE_EXECUTION, NCLT: NCLT_SUIT_FILED}
+  security_type: {DEPOSIT: CASH_BULLION_DEPOSITS, SHARES: SHARES_BONDS_SECURITIES, STOCK: INVENTORY,
+                  RECEIVABLES: ACCOUNTS_RECEIVABLE, PLANT: PLANT_MACHINERY, LAND: LAND_BUILDINGS}
+  charge: {PRIMARY_1: PRIMARY_FIRST_CHARGE, PRIMARY_2: PRIMARY_SECOND_CHARGE, PRIMARY_3: PRIMARY_THIRD_CHARGE,
+           PRIMARY_PP: PRIMARY_PARI_PASSU, COLLATERAL_1: COLLATERAL_FIRST_CHARGE,
+           COLLATERAL_2: COLLATERAL_SECOND_CHARGE, COLLATERAL_3: COLLATERAL_THIRD_CHARGE,
+           COLLATERAL_PP: COLLATERAL_PARI_PASSU}
+  bounce_reason: {INSUFF: INSUFFICIENT_FUNDS, CLOSED: ACCOUNT_CLOSED}
+
+entities:
+  party:                 # business borrower (or an individual reported commercially, constitution IND)
+    from: "{schema}.business_borrower b"
+    columns:
+      party_key: b.customer_id
+      full_name: b.business_name
+      short_name: b.short_name
+      legal_constitution: {expr: b.constitution, lookup: constitution}
+      business_category: b.msme_category
+      industry_type: {expr: b.industry, lookup: industry}
+      incorporation_date: b.incorporation_date
+      activity_class_1: b.bsr_activity_1
+      activity_class_2: b.bsr_activity_2
+      activity_class_3: b.bsr_activity_3
+      hsn_code: b.hsn_code
+      sales_amount: b.turnover
+      sales_year: b.turnover_fy
+      employee_count: b.employees
+      credit_rating: b.rating
+      rating_agency: b.rating_agency
+      rating_date: b.rating_date
+      rating_expiry_date: b.rating_valid_till
+
+  party_identifier:      # wide identifier columns -> one row per identifier present
+    selects:
+      pan:
+        from: "{schema}.business_borrower b"
+        where: b.pan IS NOT NULL
+        columns: {party_key: b.customer_id, id_type: "'PAN'", id_number: b.pan}
+      cin:
+        from: "{schema}.business_borrower b"
+        where: b.cin IS NOT NULL
+        columns: {party_key: b.customer_id, id_type: "'CIN'", id_number: b.cin}
+      tin:
+        from: "{schema}.business_borrower b"
+        where: b.tin IS NOT NULL
+        columns: {party_key: b.customer_id, id_type: "'TIN'", id_number: b.tin}
+      service_tax:
+        from: "{schema}.business_borrower b"
+        where: b.service_tax IS NOT NULL
+        columns: {party_key: b.customer_id, id_type: "'SERVICE_TAX'", id_number: b.service_tax}
+      udyam:
+        from: "{schema}.business_borrower b"
+        where: b.udyam IS NOT NULL
+        columns: {party_key: b.customer_id, id_type: "'UDYAM'", id_number: b.udyam}
+      company_registration:
+        from: "{schema}.business_borrower b"
+        where: b.company_reg_no IS NOT NULL
+        columns: {party_key: b.customer_id, id_type: "'COMPANY_REGISTRATION'", id_number: b.company_reg_no}
+      ckyc:
+        from: "{schema}.business_borrower b"
+        where: b.ckyc IS NOT NULL
+        columns: {party_key: b.customer_id, id_type: "'CKYC'", id_number: b.ckyc}
+
+  party_address:
+    from: "{schema}.business_address a"
+    columns:
+      party_key: a.customer_id
+      address_category: {expr: a.address_type, lookup: location}
+      address_line_1: a.line1
+      address_line_2: a.line2
+      address_line_3: a.line3
+      city: a.city
+      district: a.district
+      state_code: {expr: a.state, lookup: state}
+      pin_code: a.pin
+      country: {expr: a.country, lookup: country}
+      priority: a.seq
+
+  party_phone:           # contacts are held per address in the LMS; the file writer reports them per borrower
+    selects:
+      mobile:
+        from: "{schema}.business_address a"
+        where: a.mobile IS NOT NULL
+        columns: {party_key: a.customer_id, phone_number: a.mobile, phone_type: "'MOBILE'", priority: a.seq}
+      landline:
+        from: "{schema}.business_address a"
+        where: a.phone IS NOT NULL
+        columns: {party_key: a.customer_id, phone_number: "CONCAT_WS('-', a.phone_area, a.phone)",
+                  phone_type: "'OFFICE'", priority: "a.seq + 10"}
+
+  party_email:
+    from: "{schema}.business_address a"
+    where: a.email IS NOT NULL
+    columns: {party_key: a.customer_id, email: a.email, priority: a.seq}
+
+  account:
+    from: "{schema}.business_facility f"
+    where: "f.sanction_date <= :as_of_date"
+    columns:
+      account_key: f.facility_id
+      account_number: f.facility_number
+      branch_code: f.branch_code
+      account_type: {expr: f.product, lookup: product}
+      date_opened: f.sanction_date
+      sanctioned_amount: f.sanction_amount
+      currency: f.currency
+      repayment_tenure: f.tenure_months
+      payment_frequency: {expr: f.frequency, lookup: frequency}
+      drawing_power: f.drawing_power
+      current_balance: f.outstanding
+      maturity_date: f.maturity_date
+      renewal_date: f.renewal_date
+      days_past_due: f.dpd
+      asset_classification: {expr: f.asset_class, lookup: asset_class}
+      asset_classification_date: f.asset_class_date
+      amount_overdue: f.overdue
+      overdue_bucket_1: f.bucket_1
+      overdue_bucket_2: f.bucket_2
+      overdue_bucket_3: f.bucket_3
+      overdue_bucket_4: f.bucket_4
+      overdue_bucket_5: f.bucket_5
+      high_credit_amount: f.high_credit
+      emi_amount: f.instalment
+      actual_payment_amount: f.last_paid
+      date_last_payment: f.last_paid_date
+      credit_facility_status: {expr: f.status, lookup: status}
+      status_date: f.status_date
+      date_closed: f.closed_date
+      written_off_total: f.written_off
+      settlement_amount: f.settled
+      restructuring_reason: {expr: f.restructure_reason, lookup: restructure_reason}
+      security_coverage: f.security_cover
+      guarantee_coverage: f.guarantee_cover
+      remark: f.remark
+      wilful_default_date: f.wilful_date
+      suit_filed_status: {expr: f.suit_status, lookup: suit}
+      suit_reference: f.suit_ref
+      suit_amount: f.suit_amount
+      suit_date: f.suit_date
+
+  account_holder:        # one borrower per facility in this LMS
+    from: "{schema}.business_facility f"
+    where: "f.sanction_date <= :as_of_date"
+    columns: {account_key: f.facility_id, party_key: f.customer_id}
+
+  relationship:
+    from: "{schema}.business_relationship p"
+    columns: &related_party
+      party_key: p.customer_id
+      relationship_type: {expr: p.relation, lookup: relation}
+      control_percentage: "p.stake_pct / 100.0"
+      related_key: p.related_id
+      related_type: {expr: p.kind, lookup: related_kind}
+      full_name: p.name
+      name_prefix: p.prefix
+      business_category: p.category
+      industry_type: {expr: p.industry, lookup: industry}
+      gender: {expr: p.gender, lookup: gender}
+      birth_date: p.dob
+      incorporation_date: p.incorporation_date
+      pan: p.pan
+      voter_id: p.voter_id
+      passport: p.passport
+      driving_licence: p.dl
+      aadhaar: p.aadhaar
+      ration_card: p.ration_card
+      company_registration: p.company_reg_no
+      cin: p.cin
+      din: p.din
+      tin: p.tin
+      service_tax: p.service_tax
+      ckyc: p.ckyc
+      udyam: p.udyam
+      address_line_1: p.line1
+      address_line_2: p.line2
+      address_line_3: p.line3
+      city: p.city
+      district: p.district
+      state_code: {expr: p.state, lookup: state}
+      pin_code: p.pin
+      country: {expr: p.country, lookup: country}
+      mobile: p.mobile
+      telephone: p.phone
+      telephone_area_code: p.phone_area
+
+  guarantor:             # same party columns as relationship (YAML merge), keyed by facility
+    from: "{schema}.facility_guarantor p"
+    columns:
+      <<: *related_party
+      party_key: null
+      relationship_type: null
+      control_percentage: null
+      account_key: p.facility_id
+      related_key: p.guarantor_id
+      guarantee_invocation_date: p.invocation_date
+
+  security:
+    from: "{schema}.facility_security s"
+    columns:
+      account_key: s.facility_id
+      security_value: s.value
+      currency: s.currency
+      security_type: {expr: s.sec_type, lookup: security_type}
+      security_classification: {expr: s.charge, lookup: charge}
+      valuation_date: s.valuation_date
+
+  cheque_dishonour:
+    from: "{schema}.facility_cheque_bounce c"
+    columns:
+      account_key: c.facility_id
+      dishonour_date: c.bounce_date
+      amount: c.amount
+      instrument_number: c.cheque_no
+      dishonour_count: c.times
+      cheque_issue_date: c.cheque_date
+      reason: {expr: c.reason, lookup: bounce_reason}

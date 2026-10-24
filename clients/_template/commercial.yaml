@@ -1,0 +1,18 @@
+# Commercial mapping for NBFC <tenant_id>. Created by `python -m submissions.onboarding.new_tenant`.
+#
+# This file extends the base LMS commercial mapping and lists ONLY what differs for this NBFC.
+#   python -m submissions.adapters.check clients/<tenant_id>/commercial.yaml --schema <schema>
+#
+# Format reference: submissions/adapters/mapping.py. Quote codes that YAML reads as booleans ("ON", "OFF", "YES", "NO").
+submission_type: COMMERCIAL
+canonical_version: "1.1"
+extends: ../_base/commercial.yaml
+
+# lookups:                          # client code -> canonical value (submissions/canonical/model.yaml); merged
+#   product: {CCL: CASH_CREDIT}
+#   constitution: {LLP: PARTNERSHIP}
+
+# entities:
+#   party:
+#     columns:
+#       full_name: b.legal_name      # a renamed column

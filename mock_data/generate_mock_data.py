@@ -6,6 +6,7 @@
 
 Covers every UCRF consumer data element plus deliberate negative cases. Each account row carries the
 expected pipeline outcome in its test_* columns (the oracle for validation tests).
+Both schemas also hold the commercial tables (business_*, facility_*): mock_data/commercial.py.
 
 Usage:
   py mock_data/generate_mock_data.py                 # writes mock_data/mock_lms.sql (MySQL)
@@ -26,6 +27,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects import mysql
 from sqlalchemy.schema import CreateTable
+
+try:
+    from mock_data import commercial
+except ImportError:                                       # run as a script: py mock_data/generate_mock_data.py
+    import commercial
 
 SEED = 374
 AS_OF = date(2026, 9, 30)
@@ -466,6 +472,7 @@ def source_tables(schema: str, variant: bool) -> dict[str, Table]:
     if variant:
         tables["loan_ext"] = Table("loan_ext", md, Column("loan_id", String(20), primary_key=True),
                                    Column("overdue_days", Integer), Column("scheme_code", String(20)))
+    tables.update(commercial.source_tables(md))           # same commercial layout in every schema
     return tables
 
 
@@ -483,6 +490,10 @@ TENANTS = {"nbfc_001": (1, False), "nbfc_002": (2, True)}   # schema -> (tenant_
 
 
 def tenant_rows(tenant_no: int, variant: bool) -> dict[str, list[dict]]:
+    return {**_consumer_rows(tenant_no, variant), **commercial.rows(tenant_no)}
+
+
+def _consumer_rows(tenant_no: int, variant: bool) -> dict[str, list[dict]]:
     custs, accounts = build_tenant(tenant_no)
     borrowers = [flatten(c) for c in custs]
     if not variant:

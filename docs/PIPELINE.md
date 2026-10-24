@@ -74,7 +74,13 @@ Normalised, not tied to any file layout. Code columns hold **canonical values** 
 | `c_account` | account | account_key, account_number, account_type, dates (opened, last payment, closed, reported), amounts (sanctioned, balance, overdue, limits, EMI, write-off, settlement, collateral), DPD, asset class, facility status, suit status, ROI, tenure, payment frequency, previous-value fields (TL.16–20) |
 | `c_account_holder` | account × party | ownership_indicator (INDIVIDUAL, JOINT, …). **One UCRF record per row.** |
 | `c_account_history` | account × month | TH fields (optional) |
+| `c_relationship` | borrower × related party | Commercial: director, partner, holding company … (related type, relationship type, identifiers, address, contacts, control %) |
+| `c_guarantor` | account × guarantor | Commercial: same related-party columns, plus guarantee invocation date |
+| `c_security` | account × security | Commercial: value, currency, security type, charge classification, valuation date |
+| `c_cheque_dishonour` | account × cheque | Commercial: date, amount, instrument, times dishonoured, reason |
 | `c_extension_attribute` | entity × key | NBFC-specific values for custom rules (`entity, entity_key, attr_name, attr_value`) |
+
+Business borrowers use `c_party` (legal constitution, business category, industry type, ratings …), `c_party_identifier` (CIN, TIN, Udyam … as `id_type` values) and `c_party_address` (location types as `address_category` values); credit facilities use `c_account`. Columns a type does not use stay NULL.
 
 Amounts are `DECIMAL(20,2)` in the model. The formatter rounds to whole rupees per the spec.
 

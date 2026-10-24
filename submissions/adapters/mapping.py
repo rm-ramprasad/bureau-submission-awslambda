@@ -140,11 +140,12 @@ def _select(entity: str, name: str, spec, model: CanonicalModel, lookups: dict,
     known = {c.name: c for c in entity_def.columns}
     columns = {}
     for col, col_spec in spec["columns"].items():
+        if col_spec is None:                    # null removes a column (also one merged in from another entity)
+            continue
         if col not in known:
             raise MappingError(f"{where}.columns.{col}: not a column of canonical {entity}")
-        if col_spec is not None:
-            code_list = model.code_lists.get(known[col].code_list) if known[col].code_list else None
-            columns[col] = _column(entity, col, col_spec, lookups, code_list)
+        code_list = model.code_lists.get(known[col].code_list) if known[col].code_list else None
+        columns[col] = _column(entity, col, col_spec, lookups, code_list)
     missing = [c for c in type_def.required.get(entity, ()) if c not in columns]
     if missing:
         raise MappingError(f"{where}: required canonical columns not mapped: {missing}")
