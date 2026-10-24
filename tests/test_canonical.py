@@ -63,6 +63,7 @@ def _raw():
     (lambda m: m["entities"]["party"].update(indexes=[["nope"]]), "unknown columns"),
     (lambda m: m["entities"]["party"]["columns"]["full_name"].update(description="a; b"), "semicolon"),
     (lambda m: m["code_lists"]["gender"]["codes"].update({4: "Other"}), "quoted"),
+    (lambda m: m["code_lists"]["gender"]["codes"].update({"X" * 41: "Too long"}), "longer than 40"),
     (lambda m: m["entities"]["party_email"].update(table="c_party"), "duplicate table"),
 ])
 def test_invalid_definitions_rejected(mutate, message):

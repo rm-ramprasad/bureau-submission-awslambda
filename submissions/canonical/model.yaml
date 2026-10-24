@@ -158,13 +158,13 @@ code_lists:
       P2P_EDUCATION_LOAN: P2P Education Loan
       BUSINESS_LOAN_SECURED: Business Loan - Secured
       BUSINESS_LOAN_GENERAL: Business Loan - General
-      BUSINESS_LOAN_PRIORITY_SECTOR_SMALL_BUSINESS: Business Loan - Priority Sector - Small Business
-      BUSINESS_LOAN_PRIORITY_SECTOR_AGRICULTURE: Business Loan - Priority Sector - Agriculture
-      BUSINESS_LOAN_PRIORITY_SECTOR_OTHERS: Business Loan - Priority Sector - Others
-      BUSINESS_NON_FUNDED_CREDIT_FACILITY_GENERAL: Business Non-Funded Credit Facility - General
-      BUSINESS_NON_FUNDED_CREDIT_FACILITY_PRIORITY_SECTOR_SMALL_BUSINESS: Business Non-Funded Credit Facility - Priority Sector - Small Business
-      BUSINESS_NON_FUNDED_CREDIT_FACILITY_PRIORITY_SECTOR_AGRICULTURE: Business Non-Funded Credit Facility - Priority Sector - Agriculture
-      BUSINESS_NON_FUNDED_CREDIT_FACILITY_PRIORITY_SECTOR_OTHERS: Business Non-Funded Credit Facility - Priority Sector - Others
+      BUSINESS_LOAN_PS_SMALL_BUSINESS: Business Loan - Priority Sector - Small Business
+      BUSINESS_LOAN_PS_AGRICULTURE: Business Loan - Priority Sector - Agriculture
+      BUSINESS_LOAN_PS_OTHERS: Business Loan - Priority Sector - Others
+      BUSINESS_NON_FUNDED_GENERAL: Business Non-Funded Credit Facility - General
+      BUSINESS_NON_FUNDED_PS_SMALL_BUSINESS: Business Non-Funded Credit Facility - Priority Sector - Small Business
+      BUSINESS_NON_FUNDED_PS_AGRICULTURE: Business Non-Funded Credit Facility - Priority Sector - Agriculture
+      BUSINESS_NON_FUNDED_PS_OTHERS: Business Non-Funded Credit Facility - Priority Sector - Others
       BUSINESS_LOAN_AGAINST_BANK_DEPOSITS: Business Loan Against Bank Deposits
       BUSINESS_LOAN_UNSECURED: Business Loan - Unsecured
       SHORT_TERM_PERSONAL_LOAN: Short Term Personal Loan

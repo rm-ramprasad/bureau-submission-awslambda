@@ -13,6 +13,7 @@ MODEL_PATH = Path(__file__).with_name("model.yaml")
 
 COLUMN_TYPES = {"string", "code", "date", "decimal", "integer"}
 DEFAULT_CODE_LENGTH = 40      # wide enough to carry an UNMAPPED raw client value through
+MAX_CODE_LENGTH = 40          # canonical values must fit ref_code.code and the c_* code columns (VARCHAR(40))
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
@@ -88,6 +89,8 @@ def _parse_code_list(name: str, raw: dict) -> CodeList:
     for code, spec in (raw.get("codes") or {}).items():
         if not isinstance(code, str):
             raise ModelDefinitionError(f"code_lists.{name}: code {code!r} must be quoted as a string")
+        if len(code) > MAX_CODE_LENGTH:                     # ref_code.code and the c_* code columns
+            raise ModelDefinitionError(f"code_lists.{name}: code {code!r} is longer than {MAX_CODE_LENGTH} characters")
         spec = spec if isinstance(spec, dict) else {"description": spec}
         unknown = set(spec) - {"description", "active", "pin_min", "pin_max"}
         if unknown:
