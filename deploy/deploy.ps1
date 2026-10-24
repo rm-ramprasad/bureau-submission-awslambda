@@ -68,9 +68,12 @@ $out = Get-Outputs
 if (-not $FrontendOnly) {
     # ---------------------------------------------------------------- 3. database migrations, admin app user
     function Invoke-Job([string]$json) {
+        # The payload goes through a file: Windows PowerShell 5.1 strips the quotes from a JSON argument to aws.
+        $payload = Join-Path $root "build\job-payload.json"
+        [System.IO.File]::WriteAllText($payload, $json, (New-Object System.Text.UTF8Encoding $false))   # no BOM
         $file = Join-Path $root "build\job-result.json"
         Invoke-Aws lambda invoke --function-name $out.JobsFunctionName --cli-binary-format raw-in-base64-out `
-            --payload $json $file | Out-Null
+            --payload "file://$payload" $file | Out-Null
         return Get-Content $file -Raw
     }
     Write-Host "Migrations:" (Invoke-Job '{"job": "migrate"}')
