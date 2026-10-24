@@ -2,7 +2,9 @@
 # Seeded into ref_code_translation / ref_code_group on deploy (python -m submissions.reference);
 # only missing rows are inserted: rows edited or added in those tables are kept (the database is the master).
 # A canonical value with no active translation cannot be reported in the consumer file: validation flags it
-# (generated code rules) and the layout leaves the field out.
+# (generated code rules) and the layout leaves the field out. Values added for other types (commercial credit
+# types, business locations, CIN ...) are deliberately not translated here: they are not reportable for consumers.
+# Several canonical values may share one code (e.g. SMA_0, SMA_1, SMA_2 -> 05).
 
 submission_type: CONSUMER
 
@@ -115,6 +117,8 @@ translations:
     LOAN_ON_CREDIT_CARD: "37"
     PMJDY_OVERDRAFT: "38"
     MUDRA_LOAN: "39"
+    MUDRA_TERM_LOAN: "39"
+    MUDRA_WORKING_CAPITAL: "39"
     MICROFINANCE_BUSINESS_LOAN: "40"
     MICROFINANCE_PERSONAL_LOAN: "41"
     MICROFINANCE_HOUSING_LOAN: "42"
@@ -148,6 +152,10 @@ translations:
     SUIT_FILED: "01"
     WILFUL_DEFAULT: "02"
     SUIT_FILED_WILFUL_DEFAULT: "03"
+    TRIAL_IN_PROGRESS: "01"                          # commercial suit stages: a suit is filed
+    DECREE_ISSUED: "01"
+    DECREE_EXECUTION: "01"
+    NCLT_SUIT_FILED: "01"
   credit_facility_status:
     RESTRUCTURED_LOAN: "00"
     RESTRUCTURED_LOAN_GOVT_MANDATED: "01"
@@ -174,6 +182,12 @@ translations:
     DOUBTFUL: "03"
     LOSS: "04"
     SPECIAL_MENTION_ACCOUNT: "05"
+    SMA_0: "05"
+    SMA_1: "05"
+    SMA_2: "05"
+    DOUBTFUL_1: "03"
+    DOUBTFUL_2: "03"
+    DOUBTFUL_3: "03"
   collateral_type:
     NONE: "00"
     PROPERTY: "01"

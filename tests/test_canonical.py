@@ -15,31 +15,42 @@ from submissions.canonical.schema import (
 from submissions.types import type_definition
 
 EXPECTED_ENTITIES = {"party", "party_identifier", "party_phone", "party_email", "party_address", "account",
-                     "account_holder", "account_history", "extension_attribute"}
+                     "account_holder", "account_history", "extension_attribute",
+                     "relationship", "guarantor", "security", "cheque_dishonour"}         # 1.1: commercial
 
 
 # ---------------------------------------------------------------- definition
 def test_packaged_model_loads():
     model = canonical_model()
-    assert model.version == "1.0"
+    assert model.version == "1.1"
     assert set(model.entities) == EXPECTED_ENTITIES
     assert model.entities["account_holder"].column("ownership_indicator").code_list == "ownership_indicator"
 
 
+def _file_codes(tdef, list_name: str) -> set[str]:
+    return {t.output_code for t in tdef.translations[list_name].values()}
+
+
 def test_code_lists_match_spec_appendices():
-    lists = canonical_model().code_lists
-    assert len(lists["account_type"].values(active_only=False)) == 61   # 00-21, 23-47, 50-59, 61, 69-71
-    assert lists["id_type"].values() == {"PAN", "PASSPORT", "VOTER_ID", "DRIVING_LICENCE", "RATION_CARD", "AADHAAR",
-                                         "CKYC", "G_RAM_G", "ADDITIONAL_ID_1", "ADDITIONAL_ID_2"}
-    assert len(lists["credit_facility_status"].values()) == 19
+    """Canonical lists are the union of every type's catalogues; each type's file codes match its own spec."""
     consumer = type_definition("CONSUMER")
+    assert len(_file_codes(consumer, "account_type")) == 61                  # 00-21, 23-47, 50-59, 61, 69-71
+    assert _file_codes(consumer, "id_type") == {f"{n:02d}" for n in range(1, 11)}
+    assert len(_file_codes(consumer, "credit_facility_status")) == 19
     assert consumer.groups["card_account_type"] == ("CREDIT_CARD", "FLEET_CARD", "SECURED_CREDIT_CARD",
                                                     "CORPORATE_CREDIT_CARD")
     future = {v for v, t in consumer.translations["account_type"].items() if not t.active}   # "future use" in the spec
     assert future == {"TELCO_WIRELESS", "TELCO_BROADBAND", "TELCO_LANDLINE"}
-    assert "26" not in {t.output_code for t in consumer.translations["state_code"].values()}
-    for list_name, values in consumer.translations.items():         # every canonical value has a consumer code
-        assert set(values) == lists[list_name].values(active_only=False), list_name
+    assert "26" not in _file_codes(consumer, "state_code")
+
+    commercial = type_definition("COMMERCIAL")                               # Commercial UCRF 3.10, section 8
+    assert len(_file_codes(commercial, "account_type")) == 66                # 8.8 credit types
+    assert _file_codes(commercial, "credit_facility_status") == {f"{n:02d}" for n in range(3, 25)}   # 8.10 (01/02: dates)
+    assert _file_codes(commercial, "state_code") == {f"{n:02d}" for n in range(1, 38) if n != 9} | {"77", "99"}
+    assert len(_file_codes(commercial, "country")) == 195 and "079" in _file_codes(commercial, "country")
+    assert commercial.translations["currency"]["INR"].output_code == "INR"
+    assert commercial.groups["revolving_credit_type"] == ("CASH_CREDIT", "OVERDRAFT", "CORPORATE_CREDIT_CARD",
+                                                          "TEMPORARY_OVERDRAFT")
 
 
 def test_every_code_column_references_a_code_list():

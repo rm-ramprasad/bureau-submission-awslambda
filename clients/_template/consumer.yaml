@@ -9,7 +9,7 @@
 #
 # Format reference: submissions/adapters/mapping.py. Quote codes that YAML reads as booleans ("ON", "OFF", "YES", "NO").
 submission_type: CONSUMER
-canonical_version: "1.0"
+canonical_version: "1.1"
 extends: ../_base/consumer.yaml
 
 # lookups:                          # client code -> canonical value (submissions/canonical/model.yaml); merged into the base lookups

@@ -4,7 +4,7 @@
 File format (YAML):
 
     submission_type: CONSUMER               # columns it must map: submissions/types/<type>/requirements.yaml
-    canonical_version: "1.0"
+    canonical_version: "1.1"
     extends: ../_base/consumer.yaml         # optional; this file deep-merges over it
     lookups:                                # client code -> canonical value (model.yaml code lists)
       gender: {M: MALE, F: FEMALE}

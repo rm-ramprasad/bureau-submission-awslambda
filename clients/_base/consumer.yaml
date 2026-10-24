@@ -1,7 +1,7 @@
 # Base mapping: standard LMS layout (borrower_demographics + account_details) -> canonical model.
 # Tenant files extend this and override only what differs. See submissions/adapters/mapping.py for the format.
 submission_type: CONSUMER
-canonical_version: "1.0"
+canonical_version: "1.1"
 
 lookups:
   gender: {M: MALE, F: FEMALE, T: TRANSGENDER}

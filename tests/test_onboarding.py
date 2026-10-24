@@ -112,7 +112,7 @@ def test_dry_run_keep_leaves_snapshot(engine, lms_engine):
 
 def test_dry_run_lists_untranslated_codes(engine, lms_engine, tenant_repo, tmp_path):
     mapping = tmp_path / "consumer.yaml"
-    mapping.write_text(f'submission_type: CONSUMER\ncanonical_version: "1.0"\nextends: {(ROOT / "clients" / "nbfc_002" / "consumer.yaml").as_posix()}\n'
+    mapping.write_text(f'submission_type: CONSUMER\ncanonical_version: "1.1"\nextends: {(ROOT / "clients" / "nbfc_002" / "consumer.yaml").as_posix()}\n'
                        "lookups: {account_type: {PERSONAL: null, OVERDRAFT: null}}\n", encoding="utf-8")
     tenant_repo.upsert(Tenant("nbfc_002", "Demo NBFC Two", "nbfc_002", str(tmp_path)))
     report = dry_run(app_engine=engine, source_engine=lms_engine, tenant_id="nbfc_002", as_of_date=AS_OF,

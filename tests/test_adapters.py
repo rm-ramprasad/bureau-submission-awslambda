@@ -50,17 +50,17 @@ def test_tenant_mappings_load_and_inherit():
 
 @pytest.mark.parametrize("body,message", [
     ('canonical_version: "0.9"\n', "does not match"),
-    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {borrower: {from: x, columns: {a: b}}}\n', "unknown canonical entity"),
-    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {party: {from: x, columns: {nickname: b}}}\n', "not a column"),
-    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {party: {from: x, columns: {party_key: b}}}\n', "required canonical columns"),
-    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {party: {from: x, columns: {party_key: k, full_name: {expr: n, lookup: nope}}}}\n',
+    ('submission_type: CONSUMER\ncanonical_version: "1.1"\nentities: {borrower: {from: x, columns: {a: b}}}\n', "unknown canonical entity"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.1"\nentities: {party: {from: x, columns: {nickname: b}}}\n', "not a column"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.1"\nentities: {party: {from: x, columns: {party_key: b}}}\n', "required canonical columns"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.1"\nentities: {party: {from: x, columns: {party_key: k, full_name: {expr: n, lookup: nope}}}}\n',
      "unknown lookup"),
-    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {party: {frm: x}}\n', "unknown keys"),
-    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nlookups: {address_category: {OFF: "03"}}\n', "Quote it"),
-    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nlookups: {flag: {ACTIVE: yes}}\n', "Quote it"),
-    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nlookups: {gender: {M: "2"}}\n'          # a file code
+    ('submission_type: CONSUMER\ncanonical_version: "1.1"\nentities: {party: {frm: x}}\n', "unknown keys"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.1"\nlookups: {address_category: {OFF: "03"}}\n', "Quote it"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.1"\nlookups: {flag: {ACTIVE: yes}}\n', "Quote it"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.1"\nlookups: {gender: {M: "2"}}\n'          # a file code
      'entities: {party: {from: x, columns: {party_key: k, gender: {expr: g, lookup: gender}}}}\n', "not canonical gender"),
-    ('submission_type: NOPE\ncanonical_version: "1.0"\n', "not a known type"),
+    ('submission_type: NOPE\ncanonical_version: "1.1"\n', "not a known type"),
 ])
 def test_invalid_mappings_rejected(tmp_path, body, message):
     with pytest.raises(MappingError, match=message):
@@ -69,7 +69,7 @@ def test_invalid_mappings_rejected(tmp_path, body, message):
 
 def test_required_entities_and_circular_extends(tmp_path):
     with pytest.raises(MappingError, match="required entities"):
-        load_mapping(write_yaml(tmp_path, "m.yaml", 'submission_type: CONSUMER\ncanonical_version: "1.0"\n'))
+        load_mapping(write_yaml(tmp_path, "m.yaml", 'submission_type: CONSUMER\ncanonical_version: "1.1"\n'))
     write_yaml(tmp_path, "a.yaml", "extends: b.yaml\n")
     write_yaml(tmp_path, "b.yaml", "extends: a.yaml\n")
     with pytest.raises(MappingError, match="Circular"):
@@ -77,7 +77,7 @@ def test_required_entities_and_circular_extends(tmp_path):
 
 
 def test_override_can_drop_an_inherited_select(tmp_path):
-    path = write_yaml(tmp_path, "m.yaml", f'submission_type: CONSUMER\ncanonical_version: "1.0"\nextends: {(CLIENTS / "_base" / "consumer.yaml").as_posix()}\n'
+    path = write_yaml(tmp_path, "m.yaml", f'submission_type: CONSUMER\ncanonical_version: "1.1"\nextends: {(CLIENTS / "_base" / "consumer.yaml").as_posix()}\n'
                                           "entities: {party_identifier: {selects: {ckyc: null}}}\n")
     names = [s.name for s in load_mapping(path).entities["party_identifier"].selects]
     assert "ckyc" not in names and "pan" in names
@@ -132,7 +132,8 @@ def _expected_counts(tenant_no: int, variant: bool) -> dict[str, int]:
             "party_phone": sum(1 for r in b for c in phone_cols if r.get(c)),
             "party_email": sum(1 for r in b for i in (1, 2, 3) if r.get(f"email{i}")),
             "party_address": sum(1 for r in b for i in (1, 2, 3) if r.get(f"address{i}_line1")),
-            "account_history": 0, "extension_attribute": len(rows.get("loan_ext", []))}
+            "account_history": 0, "extension_attribute": len(rows.get("loan_ext", [])),
+            "relationship": 0, "guarantor": 0, "security": 0, "cheque_dishonour": 0}     # commercial only
 
 
 @pytest.mark.parametrize("tenant_id,tenant_no,variant", [("nbfc_001", 1, False), ("nbfc_002", 2, True)])
@@ -194,7 +195,7 @@ def test_insert_select_strategy_gives_same_rows(engine, tenant_repo):
 
 
 def test_failed_extract_cleans_up(engine, lms_engine, tenant_repo, tmp_path):
-    broken = write_yaml(tmp_path, "m.yaml", f'submission_type: CONSUMER\ncanonical_version: "1.0"\nextends: {(CLIENTS / "nbfc_001" / "consumer.yaml").as_posix()}\n'
+    broken = write_yaml(tmp_path, "m.yaml", f'submission_type: CONSUMER\ncanonical_version: "1.1"\nextends: {(CLIENTS / "nbfc_001" / "consumer.yaml").as_posix()}\n'
                                             "entities: {account: {columns: {days_past_due: a.no_such_column}}}\n")
     snapshots = SnapshotRepository(engine)
     with pytest.raises(ExtractError, match="account"):

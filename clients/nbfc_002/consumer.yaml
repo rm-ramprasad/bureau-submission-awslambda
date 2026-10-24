@@ -1,6 +1,6 @@
 # nbfc_002: customised LMS layout. Only the differences from the base mapping are listed.
 submission_type: CONSUMER
-canonical_version: "1.0"
+canonical_version: "1.1"
 extends: ../_base/consumer.yaml
 
 lookups:                       # merged into the base lookups

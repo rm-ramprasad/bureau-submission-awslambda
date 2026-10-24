@@ -1,4 +1,4 @@
 # nbfc_001: standard LMS layout, nothing to override.
 submission_type: CONSUMER
-canonical_version: "1.0"
+canonical_version: "1.1"
 extends: ../_base/consumer.yaml
