@@ -67,7 +67,7 @@ Safeguards to build with DB-master:
 
 ## Deploy notes (when 1b ships)
 
-- DDL: migration 012 (+ later ones). Flag before deploying.
+- DDL: migration 012 **has been executed (24-10-2026)**: frozen, never edit it; further DDL starts at 013. Flag later ones before deploying.
 - Existing snapshots hold consumer file codes, not canonical values: re-validate (new request) before generating files from them.
 - RDS `tenant.mapping_path` values point at `…/mapping.yaml`: the code reads that as the folder, so no data update is needed (optionally set them to `clients/<t>`).
 - The first `migrate` after deploying 012 fills the new reference tables (seed inserts missing rows).
