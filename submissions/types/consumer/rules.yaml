@@ -95,34 +95,42 @@ parameters:
     label: Minimum address length
     description: Shortest acceptable address (all lines together, in characters).
     used_by: [UCRF.PA.ADDRESS_TOO_SHORT]
+  - name: name_salutation_pattern
+    type: regex
+    default: '^(MR|MRS|MS|DR|SMT|KUM)\.?$|^(MISS|SHRI)$'
+    label: Salutations ignored at the start of a name
+    description: >-
+      Regular expression for a first word that is a salutation (matched ignoring case), e.g. add |^SRI$ or
+      |^THIRU$. A leading salutation is not counted as part of the name.
+    used_by: [UCRF.PN.NAME_NO_VALID_TOKEN, UCRF.PN.NAME_STARTS_WITH_DESCRIPTOR, UCRF.PN.SINGLE_WORD_NAME]
   - name: id_pattern_pan
     type: regex
     default: '^[A-Z]{3}[PH][A-Z][0-9]{4}[A-Z]$'
-    label: PAN pattern (ID type 01)
+    label: PAN pattern
     description: Regular expression a PAN must match (after removing delimiters, upper case).
     used_by: [UCRF.ID.NUMBER_FORMAT]
   - name: id_pattern_passport
     type: regex
     default: '^(?=.{7,10}$)[A-Z]{1,2}[0-9]+$'
-    label: Passport pattern (ID type 02)
+    label: Passport pattern
     description: 7-10 characters, a letter in position 1 or 2, digits after.
     used_by: [UCRF.ID.NUMBER_FORMAT]
   - name: id_pattern_voter
     type: regex
     default: '^(?=.{9,}$)[A-Z]{2,3}[A-Z0-9]+$'
-    label: Voter ID pattern (ID type 03)
+    label: Voter ID pattern
     description: At least 9 characters starting with 2-3 letters.
     used_by: [UCRF.ID.NUMBER_FORMAT]
   - name: id_pattern_ckyc
     type: regex
     default: '^[A-Z0-9]{1,15}$'
-    label: CKYC pattern (ID type 09)
+    label: CKYC pattern
     description: Up to 15 letters and digits.
     used_by: [UCRF.ID.NUMBER_FORMAT]
   - name: id_pattern_gram_g
     type: regex
     default: '^[A-Z]{2}-[0-9]{2}-[0-9]{3}-[0-9]{3}-[0-9]{3}/[0-9]{3}[A-Za-z0-9]+$'
-    label: G RAM G pattern (ID type 10)
+    label: G RAM G pattern
     description: SS-DD-BBB-GGG-VVV/HHHSurname (spaces removed, delimiters kept).
     used_by: [UCRF.ID.NUMBER_FORMAT]
 

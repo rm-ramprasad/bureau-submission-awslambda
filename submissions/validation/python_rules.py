@@ -15,7 +15,7 @@ from submissions.canonical.schema import ENTITY_TABLES
 from submissions.validation.checks.addresses import pin_format_problem, pin_ranges, pin_state_problem
 from submissions.validation.checks.emails import email_problem
 from submissions.validation.checks.identifiers import id_number_problem
-from submissions.validation.checks.names import check_name
+from submissions.validation.checks.names import DEFAULT_SALUTATION_PATTERN, check_name
 from submissions.validation.checks.phones import valid_numbers
 
 
@@ -55,8 +55,9 @@ def register(name: str):
 
 
 def _names(ctx: RuleContext, predicate) -> Iterator[PyFinding]:
+    salutations = ctx.params.get("name_salutation_pattern", DEFAULT_SALUTATION_PATTERN)
     for p in ctx.rows("party"):
-        if p.full_name and predicate(check_name(p.full_name)):
+        if p.full_name and predicate(check_name(p.full_name, salutations)):
             yield PyFinding(p.row_id, p.party_key, value=p.full_name)
 
 
@@ -118,7 +119,7 @@ def pin_format(ctx):
 
 @register("pin_state_mismatch")
 def pin_state_mismatch(ctx):
-    ranges = pin_ranges()
+    ranges = pin_ranges(ctx.conn)
     for a in ctx.rows("party_address"):
         problem = pin_state_problem(a.pin_code, a.state_code, ranges) if a.pin_code else None
         if problem:

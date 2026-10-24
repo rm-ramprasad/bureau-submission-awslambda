@@ -1,9 +1,9 @@
 import pytest
 
-from submissions.validation.checks.addresses import pin_format_problem, pin_state_problem
+from submissions.validation.checks.addresses import pin_format_problem, pin_ranges, pin_state_problem
 from submissions.validation.checks.emails import email_problem
 from submissions.validation.checks.identifiers import id_number_problem, verhoeff_valid
-from submissions.validation.checks.names import check_name
+from submissions.validation.checks.names import DEFAULT_SALUTATION_PATTERN, check_name
 from submissions.validation.checks.phones import number_problem, valid_numbers
 
 
@@ -25,6 +25,12 @@ def test_check_name(name, digits, bad, descriptor_first, valid_token, words):
     c = check_name(name)
     assert (c.has_digits, c.disallowed_chars, c.starts_with_descriptor, c.has_valid_token, c.word_count) == \
         (digits, bad, descriptor_first, valid_token, words)
+
+
+def test_salutation_pattern_is_a_setting():
+    assert check_name("Sri Rakesh Kumar").word_count == 3                     # not a default salutation
+    assert check_name("Sri Rakesh Kumar", DEFAULT_SALUTATION_PATTERN + "|^SRI$").word_count == 2
+    assert check_name("shri Rakesh").word_count == 1 and check_name("Shri. Rakesh").word_count == 2
 
 
 # ---------------------------------------------------------------- identifiers (§7.1)
@@ -89,6 +95,17 @@ def test_email_double_dot_configurable():
     ("400001", "MAHARASHTRA", True, True), ("560001", "MAHARASHTRA", True, False), ("604", "TAMIL_NADU", False, True),
     ("6040020000", "TAMIL_NADU", False, True), ("M5S2G4", "FOREIGN", True, True), ("956789", "APO", True, True),
 ])
-def test_pin_rules(pin, state, format_ok, state_ok):
+def test_pin_rules(engine, pin, state, format_ok, state_ok):
+    with engine.connect() as conn:                       # ranges from ref_state_pin (seeded by conftest)
+        ranges = pin_ranges(conn)
     assert (pin_format_problem(pin, state) is None) == format_ok
-    assert (pin_state_problem(pin, state) is None) == state_ok
+    assert (pin_state_problem(pin, state, ranges) is None) == state_ok
+
+
+def test_pin_ranges_come_from_the_table(engine):
+    from sqlalchemy import update
+    from submissions.canonical.schema import ref_state_pin
+    with engine.begin() as conn:                         # an admin widens Maharashtra's range in the database
+        conn.execute(update(ref_state_pin).where(ref_state_pin.c.state_code == "MAHARASHTRA")
+                     .values(pin_prefix_max=56))
+        assert pin_state_problem("560001", "MAHARASHTRA", pin_ranges(conn)) is None

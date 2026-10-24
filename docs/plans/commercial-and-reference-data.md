@@ -32,7 +32,7 @@ Safeguards to build with DB-master:
 3. Every change audited (`audit_event`: who, when, old → new).
 4. **Freeze per snapshot**: validation records the translations it used; file generation uses that copy, so the file matches what was validated.
 5. Export to YAML (review, or copy to another customer account).
-6. No reference values hard-coded in Python: PIN ranges from `ref_state_pin`; phone/ID/state constants in checks become rule settings or `ref_code_group` rows.
+6. No reference values hard-coded in Python: PIN ranges from `ref_state_pin`; salutations a rule parameter (`name_salutation_pattern`). **Decided to stay in code:** canonical values that name a meaning the logic depends on (`MOBILE`, `NOT_CLASSIFIED`, `FOREIGN`, `AADHAAR`, `G_RAM_G`, which ID type uses which `id_pattern_*`), and algorithms (Verhoeff, phone edits, e-mail rules): editing them in the database could only break validation. ID patterns were already rule parameters.
 
 ## Phases
 
@@ -40,7 +40,7 @@ Safeguards to build with DB-master:
 |---|---|---|---|
 | 1 | Generalise engines: record keys in model, pack discovery / prefix / categories / cascade from the pack | No | **Done** (uncommitted), 429 tests passed at that point |
 | 1b | Per-type folders, canonical values, reference tables, consumer rewritten — consumer files byte-identical (golden tests) | Yes (012) | **Done** (uncommitted), 434 passed |
-| 1c | DB-master safeguards 1–6 above | Yes (snapshot translation copy, maybe audit fields) | **1, 4 done** (seed insert-missing; freeze per snapshot, migration 013). Left: 6 (no hard-coded reference values), then 2, 3, 5 (admin page) after commercial |
+| 1c | DB-master safeguards 1–6 above | Yes (snapshot translation copy, maybe audit fields) | **1, 4, 6 done** (seed insert-missing; freeze per snapshot, migration 013; PIN ranges from the DB, salutation parameter). Left: 2, 3, 5 (admin page) after commercial |
 | 2 | Commercial model: extend `c_party` / `c_party_address` / `c_account`; new `c_relationship`, `c_guarantor`, `c_security`, `c_cheque_dishonour`; neutral product/status taxonomy (union of both specs); commercial mock data + `clients/_base/commercial.yaml` | Yes | Not started |
 | 3 | `types/commercial/rules.yaml` + cascade (record = facility × borrower via `c_account_holder`; borrower reject rejects all its facilities; RS optional for credit type 9026) | Seed rows | Not started |
 | 4 | Generic pipe-delimited engine (`formats/delimited/`) + `types/commercial/layout.yaml`; golden tests; TS counts; CRLF + trailing pipe | No | Not started |
@@ -62,8 +62,8 @@ Safeguards to build with DB-master:
 
 1. ~~Commit 1b~~ done, merged into main; migration 012 executed.
 2. ~~1c item 4~~ done 24-10-2026: `snapshot_code_translation` (migration 013, **not yet executed**).
-3. 1c item 6: remaining hard-coded reference values in checks (phone/ID/state constants) → rule settings or `ref_code_group`.
-4. Phase 2 (commercial model) onwards. Admin page (1c items 2, 3, 5) after commercial.
+3. ~~1c item 6~~ done 24-10-2026 (branch `reference-values-out-of-checks`, no DDL).
+4. **Next:** phase 2 (commercial model) onwards. Admin page (1c items 2, 3, 5) after commercial.
 
 ## Deploy notes (when 1b ships)
 

@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 DESCRIPTOR_RE = re.compile(r"^[SWHD][/\\]O$", re.IGNORECASE)          # S/O W/O H/O D/O (or with \)
-SALUTATIONS = {"MR", "MR.", "MRS", "MRS.", "MS", "MS.", "MISS", "DR", "DR.", "SHRI", "SMT", "SMT.", "KUM", "KUM."}
+# A leading salutation is ignored (spec §6.1 #7); the spec gives no list, so the pattern is a rule parameter
+# (name_salutation_pattern) an NBFC can extend, e.g. with regional titles. Matched case-insensitively.
+DEFAULT_SALUTATION_PATTERN = r"^(MR|MRS|MS|DR|SMT|KUM)\.?$|^(MISS|SHRI)$"
 DISALLOWED = set("~!#$%^&*=|?+,@")
 
 
@@ -19,9 +22,14 @@ class NameCheck:
     word_count: int                # words after dropping a leading salutation and descriptors
 
 
-def check_name(full_name: str | None) -> NameCheck:
+@lru_cache(maxsize=16)
+def _salutation(pattern: str) -> re.Pattern:
+    return re.compile(pattern, re.IGNORECASE)
+
+
+def check_name(full_name: str | None, salutation_pattern: str = DEFAULT_SALUTATION_PATTERN) -> NameCheck:
     tokens = (full_name or "").split()
-    if tokens and tokens[0].upper() in SALUTATIONS:          # leading salutation is ignored
+    if tokens and _salutation(salutation_pattern).search(tokens[0]):      # leading salutation is ignored
         tokens = tokens[1:]
     words = [t for t in tokens if not DESCRIPTOR_RE.match(t)]
     bad = sorted({ch for t in words for ch in t if ch in DISALLOWED or ch in "/\\"})
