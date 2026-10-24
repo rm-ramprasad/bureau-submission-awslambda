@@ -41,8 +41,10 @@ class _Record:
 
 
 class Renderer:
-    def __init__(self, layout: Layout, data: SnapshotData, bureau: BureauProfile, run: SimpleNamespace):
+    def __init__(self, layout: Layout, data: SnapshotData, bureau: BureauProfile, run: SimpleNamespace,
+                 translations: dict[str, dict[str, str]] | None = None):
         self.layout, self.data, self.bureau, self.run = layout, data, bureau, run
+        self.translations = translations or {}        # code list -> canonical value -> file code (active only)
         self.truncated: list[str] = []
 
     # ---------------------------------------------------------------- values
@@ -84,6 +86,10 @@ class Renderer:
             value = spec.default
             if isinstance(value, str) and value.startswith(SOURCE_PATHS):
                 value = self._resolve(value, row, entity, rec)[0]
+        if spec.translate:                                # no active file code: validation flags it; left out here
+            value = self.translations.get(spec.translate, {}).get(str(value))
+            if value is None:
+                return None
         if spec.cap is not None:
             value = min(int(value), spec.cap)
         text = VALUE_FORMATTERS[spec.format](value, row, spec.args)
@@ -172,10 +178,10 @@ def _compare(a, b, order_by: tuple[str, ...]) -> int:
 
 
 def build_file(engine: Engine, snapshot_id: int, as_of_date: date, bureau: BureauProfile, cycle,
-               layout: Layout) -> tuple[bytes, FileStats]:
+               layout: Layout, translations: dict[str, dict[str, str]]) -> tuple[bytes, FileStats]:
     with engine.connect() as conn:
         data = load_snapshot(conn, snapshot_id, layout)
-    renderer = Renderer(layout, data, bureau, SimpleNamespace(as_of_date=as_of_date, cycle=cycle))
+    renderer = Renderer(layout, data, bureau, SimpleNamespace(as_of_date=as_of_date, cycle=cycle), translations)
     seen, records, duplicates = set(), [], 0
     for account_key, party_key in data.accepted:
         rec = renderer.record(account_key, party_key)

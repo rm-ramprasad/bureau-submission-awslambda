@@ -63,12 +63,12 @@ bucket settings. Existing files are never overwritten.
 
 ## NBFC mappings
 
-`clients/_base/mapping.yaml` maps the standard LMS layout. Each NBFC's `clients/<tenant>/mapping.yaml` extends it and
+`clients/_base/consumer.yaml` maps the standard LMS layout. Each NBFC's `clients/<tenant>/consumer.yaml` extends it and
 lists only the differences (format: `submissions/adapters/mapping.py`; step by step: [ONBOARDING.md](ONBOARDING.md)).
 
 ```powershell
-.\.venv\Scripts\python -m submissions.adapters.check clients/nbfc_002/mapping.yaml --schema nbfc_002 --as-of 2026-09-30
-.\.venv\Scripts\python -m submissions.adapters.compiler clients/nbfc_002/mapping.yaml --schema nbfc_002 --out clients/nbfc_002/generated
+.\.venv\Scripts\python -m submissions.adapters.check clients/nbfc_002/consumer.yaml --schema nbfc_002 --as-of 2026-09-30
+.\.venv\Scripts\python -m submissions.adapters.compiler clients/nbfc_002/consumer.yaml --schema nbfc_002 --out clients/nbfc_002/generated/consumer
 ```
 
 ## Tests

@@ -4,16 +4,17 @@
 # Workflow (see ONBOARDING.md):
 #   1. python -m submissions.onboarding.introspect --schema <schema>   -> which columns to override
 #   2. edit this file
-#   3. python -m submissions.adapters.check clients/<tenant_id>/mapping.yaml --schema <schema>
+#   3. python -m submissions.adapters.check clients/<tenant_id>/consumer.yaml --schema <schema>
 #   4. python -m submissions.onboarding.dry_run --tenant <tenant_id>
 #
 # Format reference: submissions/adapters/mapping.py. Quote codes that YAML reads as booleans ("ON", "OFF", "YES", "NO").
+submission_type: CONSUMER
 canonical_version: "1.0"
-extends: ../_base/mapping.yaml
+extends: ../_base/consumer.yaml
 
-# lookups:                          # client code -> UCRF code; merged into the base lookups
-#   account_type: {HOME: "02", PERS: "05"}
-#   gender: {MALE: "2", FEMALE: "1"}
+# lookups:                          # client code -> canonical value (submissions/canonical/model.yaml); merged into the base lookups
+#   account_type: {HOME: HOUSING_LOAN, PERS: PERSONAL_LOAN}
+#   gender: {MALE: MALE, FEMALE: FEMALE}
 
 # entities:
 #   party:

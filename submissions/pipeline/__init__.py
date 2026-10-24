@@ -1,15 +1,23 @@
-"""Pipelines per submission type and their registry."""
+"""Pipelines per submission type and their registry: each type folder with a pipeline.py (`PIPELINE`) is one."""
 
 from __future__ import annotations
 
+import importlib
+
 from submissions.enums import SubmissionType
 from submissions.pipeline.base import FileGenerationUnavailable, Services, SubmissionPipeline
-from submissions.pipeline.consumer import ConsumerPipeline
+from submissions.types import type_definitions
 
-REGISTRY: dict[SubmissionType, SubmissionPipeline] = {
-    SubmissionType.CONSUMER: ConsumerPipeline(),
-    # COMMERCIAL, NESL: plug in when their specs are built
-}
+
+def _discover() -> dict[SubmissionType, SubmissionPipeline]:
+    found = {}
+    for st, d in type_definitions().items():
+        if (d.folder / "pipeline.py").exists():
+            found[st] = importlib.import_module(f"submissions.types.{d.folder.name}.pipeline").PIPELINE
+    return found
+
+
+REGISTRY: dict[SubmissionType, SubmissionPipeline] = _discover()
 
 
 def get_pipeline(submission_type: SubmissionType | str) -> SubmissionPipeline | None:

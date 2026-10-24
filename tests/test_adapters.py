@@ -11,6 +11,7 @@ from submissions.adapters.check import check_mapping
 from submissions.adapters.compiler import compile_column, compile_mapping, write_generated
 from submissions.adapters.extract import ExtractError, run_extract
 from submissions.adapters.mapping import ColumnExpr, MappingError, deep_merge, load_mapping
+from submissions.canonical.definition import canonical_model
 from submissions.canonical.schema import ENTITY_TABLES
 from submissions.enums import ExtractStrategy, SnapshotStatus
 from submissions.snapshot import SnapshotExistsError, SnapshotRepository
@@ -21,7 +22,7 @@ AS_OF = date(2026, 9, 30)
 
 
 def mapping(tenant: str):
-    return load_mapping(CLIENTS / tenant / "mapping.yaml")
+    return load_mapping(CLIENTS / tenant / "consumer.yaml")
 
 
 def write_yaml(tmp_path: Path, name: str, text: str) -> Path:
@@ -39,8 +40,8 @@ def test_deep_merge_overrides_and_removes():
 def test_tenant_mappings_load_and_inherit():
     base, variant = mapping("nbfc_001"), mapping("nbfc_002")
     assert set(base.entities) == set(variant.entities) - {"extension_attribute"}
-    assert base.lookups["gender"] == {"M": "2", "F": "1", "T": "3"}
-    assert variant.lookups["gender"]["MALE"] == "2" and variant.lookups["gender"]["M"] == "2"   # merged
+    assert base.lookups["gender"] == {"M": "MALE", "F": "FEMALE", "T": "TRANSGENDER"}
+    assert variant.lookups["gender"]["MALE"] == "MALE" and variant.lookups["gender"]["M"] == "MALE"   # merged
     assert variant.entities["party"].selects[0].columns["birth_date"].expr == "b.dob"
     phone1 = next(s for s in variant.entities["party_phone"].selects if s.name == "phone1")
     assert phone1.columns["phone_number"].expr == "b.primary_mobile"
@@ -49,14 +50,17 @@ def test_tenant_mappings_load_and_inherit():
 
 @pytest.mark.parametrize("body,message", [
     ('canonical_version: "0.9"\n', "does not match"),
-    ('canonical_version: "1.0"\nentities: {borrower: {from: x, columns: {a: b}}}\n', "unknown canonical entity"),
-    ('canonical_version: "1.0"\nentities: {party: {from: x, columns: {nickname: b}}}\n', "not a column"),
-    ('canonical_version: "1.0"\nentities: {party: {from: x, columns: {party_key: b}}}\n', "required canonical columns"),
-    ('canonical_version: "1.0"\nentities: {party: {from: x, columns: {party_key: k, full_name: {expr: n, lookup: nope}}}}\n',
+    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {borrower: {from: x, columns: {a: b}}}\n', "unknown canonical entity"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {party: {from: x, columns: {nickname: b}}}\n', "not a column"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {party: {from: x, columns: {party_key: b}}}\n', "required canonical columns"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {party: {from: x, columns: {party_key: k, full_name: {expr: n, lookup: nope}}}}\n',
      "unknown lookup"),
-    ('canonical_version: "1.0"\nentities: {party: {frm: x}}\n', "unknown keys"),
-    ('canonical_version: "1.0"\nlookups: {address_category: {OFF: "03"}}\n', "Quote it"),
-    ('canonical_version: "1.0"\nlookups: {flag: {ACTIVE: yes}}\n', "Quote it"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nentities: {party: {frm: x}}\n', "unknown keys"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nlookups: {address_category: {OFF: "03"}}\n', "Quote it"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nlookups: {flag: {ACTIVE: yes}}\n', "Quote it"),
+    ('submission_type: CONSUMER\ncanonical_version: "1.0"\nlookups: {gender: {M: "2"}}\n'          # a file code
+     'entities: {party: {from: x, columns: {party_key: k, gender: {expr: g, lookup: gender}}}}\n', "not canonical gender"),
+    ('submission_type: NOPE\ncanonical_version: "1.0"\n', "not a known type"),
 ])
 def test_invalid_mappings_rejected(tmp_path, body, message):
     with pytest.raises(MappingError, match=message):
@@ -65,7 +69,7 @@ def test_invalid_mappings_rejected(tmp_path, body, message):
 
 def test_required_entities_and_circular_extends(tmp_path):
     with pytest.raises(MappingError, match="required entities"):
-        load_mapping(write_yaml(tmp_path, "m.yaml", 'canonical_version: "1.0"\n'))
+        load_mapping(write_yaml(tmp_path, "m.yaml", 'submission_type: CONSUMER\ncanonical_version: "1.0"\n'))
     write_yaml(tmp_path, "a.yaml", "extends: b.yaml\n")
     write_yaml(tmp_path, "b.yaml", "extends: a.yaml\n")
     with pytest.raises(MappingError, match="Circular"):
@@ -73,7 +77,7 @@ def test_required_entities_and_circular_extends(tmp_path):
 
 
 def test_override_can_drop_an_inherited_select(tmp_path):
-    path = write_yaml(tmp_path, "m.yaml", f'canonical_version: "1.0"\nextends: {(CLIENTS / "_base" / "mapping.yaml").as_posix()}\n'
+    path = write_yaml(tmp_path, "m.yaml", f'submission_type: CONSUMER\ncanonical_version: "1.0"\nextends: {(CLIENTS / "_base" / "consumer.yaml").as_posix()}\n'
                                           "entities: {party_identifier: {selects: {ckyc: null}}}\n")
     names = [s.name for s in load_mapping(path).entities["party_identifier"].selects]
     assert "ckyc" not in names and "pan" in names
@@ -144,25 +148,25 @@ def test_stream_extract_matches_source(engine, lms_engine, tenant_repo, tenant_i
 
 
 def test_canonical_values_after_translation(engine, lms_engine, tenant_repo):
-    """Both layouts land as the same UCRF codes in the canonical model."""
+    """Both layouts land as the same canonical values."""
     for tenant_id in ("nbfc_001", "nbfc_002"):
         sid = run_extract(tenant=tenant_repo.get(tenant_id), mapping=mapping(tenant_id), submission_type="CONSUMER",
                           as_of_date=AS_OF, app_engine=engine, source_engine=lms_engine,
                           snapshots=SnapshotRepository(engine), owner="t").snapshot_id
         home_loan = _rows(engine, "account", sid, account_key="L00001")[0]
-        assert (home_loan.account_type, home_loan.date_opened) == ("02", date(2019, 4, 15))
+        assert (home_loan.account_type, home_loan.date_opened) == ("HOUSING_LOAN", date(2019, 4, 15))
         written_off = _rows(engine, "account", sid, account_key="L00025")[0]          # scenario 25
-        assert (written_off.days_past_due, written_off.credit_facility_status) == (1100, "02")
+        assert (written_off.days_past_due, written_off.credit_facility_status) == (1100, "WRITTEN_OFF")
         assert written_off.written_off_total == Decimal("265000.00")
         credit_balance = _rows(engine, "account", sid, account_key="L00009")[0]       # scenario 9
         assert credit_balance.current_balance == Decimal("-2450.00")
         joint = _rows(engine, "account_holder", sid, account_key="L00002")           # scenario 2: both are Joint
-        assert sorted(h.ownership_indicator for h in joint) == ["4", "4"]
-        assert {r.gender for r in _rows(engine, "party", sid)} <= {"1", "2", "3", None}
-        assert {r.income_basis for r in _rows(engine, "party", sid)} == {"G", "N"}
-        assert {r.address_category for r in _rows(engine, "party_address", sid)} <= {"01", "02", "03", "04", "05"}
-        assert {r.state_code for r in _rows(engine, "party_address", sid)} <= \
-            {f"{n:02d}" for n in range(1, 38)} | {"77", "99"}
+        assert sorted(h.ownership_indicator for h in joint) == ["JOINT", "JOINT"]
+        model = canonical_model().code_lists
+        assert {r.gender for r in _rows(engine, "party", sid)} <= model["gender"].values() | {None}
+        assert {r.income_basis for r in _rows(engine, "party", sid)} == {"GROSS", "NET"}
+        assert {r.address_category for r in _rows(engine, "party_address", sid)} <= model["address_category"].values()
+        assert {r.state_code for r in _rows(engine, "party_address", sid)} <= model["state_code"].values()
 
 
 def test_extension_attributes_only_for_variant(engine, lms_engine, tenant_repo):
@@ -190,7 +194,7 @@ def test_insert_select_strategy_gives_same_rows(engine, tenant_repo):
 
 
 def test_failed_extract_cleans_up(engine, lms_engine, tenant_repo, tmp_path):
-    broken = write_yaml(tmp_path, "m.yaml", f'canonical_version: "1.0"\nextends: {(CLIENTS / "nbfc_001" / "mapping.yaml").as_posix()}\n'
+    broken = write_yaml(tmp_path, "m.yaml", f'submission_type: CONSUMER\ncanonical_version: "1.0"\nextends: {(CLIENTS / "nbfc_001" / "consumer.yaml").as_posix()}\n'
                                             "entities: {account: {columns: {days_past_due: a.no_such_column}}}\n")
     snapshots = SnapshotRepository(engine)
     with pytest.raises(ExtractError, match="account"):

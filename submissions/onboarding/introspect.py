@@ -2,7 +2,7 @@
 mapping uses that the NBFC does not have. The second part tells you exactly what the tenant mapping must override.
 
 Usage:  python -m submissions.onboarding.introspect --schema nbfc_002 [--reference nbfc_001]
-                                                   [--mapping clients/_base/mapping.yaml]
+                                                   [--mapping clients/_base/consumer.yaml]
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from sqlalchemy import Engine, inspect
 from submissions.adapters.mapping import Mapping, load_mapping
 
 DEFAULT_REFERENCE = "nbfc_001"
-DEFAULT_MAPPING = Path("clients/_base/mapping.yaml")
+DEFAULT_MAPPING = Path("clients/_base/consumer.yaml")
 _FROM_RE = re.compile(r"\{schema\}\.(\w+)(?:\s+(?:AS\s+)?(\w+))?", re.IGNORECASE)
 _COLUMN_RE = re.compile(r"\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)\b")
 

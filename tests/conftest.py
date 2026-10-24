@@ -14,7 +14,7 @@ import submissions.canonical.schema  # noqa: F401
 import submissions.ops.tables  # noqa: F401
 import submissions.requests.tables  # noqa: F401
 import submissions.validation.tables  # noqa: F401
-from submissions.canonical.schema import ref_code, ref_code_rows, ref_state_pin, ref_state_pin_rows
+from submissions.reference import seed as seed_reference
 from submissions.bureaus import BureauRepository
 from submissions.db import make_engine, metadata
 from submissions.requests import RequestRepository
@@ -62,9 +62,7 @@ def engine():
     eng = sqlite_engine()
     metadata.create_all(eng)
     seed_tenants(TenantRepository(eng, clock=lambda: datetime(2026, 10, 1)))  # nbfc_001, nbfc_002
-    with eng.begin() as conn:                     # reference data loaded by migration 003 in MySQL
-        conn.execute(ref_code.insert(), ref_code_rows())
-        conn.execute(ref_state_pin.insert(), ref_state_pin_rows())
+    seed_reference(eng)                           # as on deploy: canonical codes + each type's translations
     yield eng
     eng.dispose()
 

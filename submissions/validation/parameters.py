@@ -75,8 +75,8 @@ class Parameter:
 
 @cache
 def builtin_parameters(submission_type: SubmissionType | str) -> dict[str, Parameter]:
-    from submissions.validation.rules import PACK_FILES, PACKS_DIR
-    raw = yaml.safe_load((PACKS_DIR / PACK_FILES[SubmissionType(submission_type)]).read_text(encoding="utf-8"))
+    from submissions.validation.rules import pack_paths
+    raw = yaml.safe_load(pack_paths()[SubmissionType(submission_type)].read_text(encoding="utf-8"))
     out = {}
     for spec in raw.get("parameters", []):
         p = Parameter(name=spec["name"], type=spec["type"], default=None, label=spec["label"],

@@ -10,7 +10,7 @@ Run every command from the project root with `SUBMISSIONS_DATABASE_URL` set
 .\.venv\Scripts\python -m submissions.onboarding.new_tenant --tenant nbfc_017 --name "Acme Finance" --schema acme_lms
 ```
 
-- Creates the `tenant` row and `clients/nbfc_017/mapping.yaml` from `clients/_template/`.
+- Creates the `tenant` row and `clients/nbfc_017/consumer.yaml` from `clients/_template/`.
 - It never overwrites an existing mapping file.
 - Add `--placeholder-bureaus` to get dummy bureau profiles for testing. Real member IDs come in step 6.
 - Use `--strategy insert_select` only if our app tables are on the same MySQL server as the NBFC schema.
@@ -27,19 +27,19 @@ The report lists:
 
 ## 3. Write the overrides
 
-Edit `clients/nbfc_017/mapping.yaml` and list only what differs. The file has commented examples, and the full format is in `submissions/adapters/mapping.py`. Typical overrides:
+Edit `clients/nbfc_017/consumer.yaml` and list only what differs. The file has commented examples, and the full format is in `submissions/adapters/mapping.py`. Typical overrides:
 
 - **Renamed columns:** `party: {columns: {birth_date: b.dob}}`
 - **Extra joins:** `account: {from: "{schema}.account_details a LEFT JOIN {schema}.loan_ext x ON ..."}`
-- **Different code values:** `lookups: {account_type: {HOME: "02"}}` (merged into the base lookups)
+- **Different code values:** `lookups: {account_type: {HOME: HOUSING_LOAN}}` (client code → canonical value from `submissions/canonical/model.yaml`; merged into the base lookups)
 - **NBFC-specific fields for custom rules:** an `extension_attribute` entity
 
-Run `introspect` again with `--mapping clients/nbfc_017/mapping.yaml`. It should report that the mapping resolves fully.
+Run `introspect` again with `--mapping clients/nbfc_017/consumer.yaml`. It should report that the mapping resolves fully.
 
 ## 4. Check the mapping against the live schema
 
 ```powershell
-.\.venv\Scripts\python -m submissions.adapters.check clients/nbfc_017/mapping.yaml --schema acme_lms --as-of 2026-09-30
+.\.venv\Scripts\python -m submissions.adapters.check clients/nbfc_017/consumer.yaml --schema acme_lms --as-of 2026-09-30
 ```
 
 The check confirms:
@@ -75,10 +75,10 @@ Load the member ID, short name, header tag and file-name pattern each bureau iss
 
 ## 7. Go live
 
-Commit `clients/nbfc_017/mapping.yaml` and regenerate the reviewed SQL:
+Commit `clients/nbfc_017/consumer.yaml` and regenerate the reviewed SQL:
 
 ```powershell
-.\.venv\Scripts\python -m submissions.adapters.compiler clients/nbfc_017/mapping.yaml --schema acme_lms --out clients/nbfc_017/generated
+.\.venv\Scripts\python -m submissions.adapters.compiler clients/nbfc_017/consumer.yaml --schema acme_lms --out clients/nbfc_017/generated/consumer
 ```
 
 Then raise a **Validate** run in the UI, review it, and use **Generate files from this validation**.

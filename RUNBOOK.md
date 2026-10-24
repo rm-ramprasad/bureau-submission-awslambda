@@ -143,7 +143,7 @@ Run a job by hand: `aws lambda invoke --function-name $fn --cli-binary-format ra
 | `Can't connect to MySQL server` / timeouts | The RDS security group lost the 3306 rule from `sg-011b04f5bf9fd3826` |
 | S3 calls time out | The S3 gateway endpoint is missing from the route table |
 | "Cannot move request from PENDING to PENDING" | A double click on Retry: the run was already re-queued |
-| `Snapshot build failed: <entity>: ...` | Mapping SQL error: `python -m submissions.adapters.check clients/<tenant>/mapping.yaml --schema <schema>`, fix, Retry |
+| `Snapshot build failed: <entity>: ...` | Mapping SQL error: `python -m submissions.adapters.check clients/<tenant>/consumer.yaml --schema <schema>`, fix, Retry |
 | `No bureau profile for …` | Add the bureau's profile for that NBFC (`bureau_profile`) |
 | Many `UCRF.ENUM.*` findings | Client codes missing from the mapping lookups (`python -m submissions.onboarding.dry_run --tenant <id>`) |
 | "Already open (draft, pending or running)" | One open request per NBFC, date and type: submit or discard the draft |

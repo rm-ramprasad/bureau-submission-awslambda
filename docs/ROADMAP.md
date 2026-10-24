@@ -7,9 +7,9 @@ the git history.
 
 | Item | What is needed | Blocks |
 |---|---|---|
-| Base LMS schema | The real standard LMS schema and one NBFC customisation sample, to write `clients/_base/mapping.yaml` for real and make the mock data realistic | Onboarding real NBFCs |
+| Base LMS schema | The real standard LMS schema and one NBFC customisation sample, to write `clients/_base/consumer.yaml` for real and make the mock data realistic | Onboarding real NBFCs |
 | Bureau values per NBFC | Real member IDs, header tags and file-name formats (`bureau_profile`; placeholders today) | First live submission |
-| CIC sample file | Re-confirm the encoding decision: segment tags without a length prefix (`PNN01`), no separator or line break between records (`encoding:` in `submissions/formats/ucrf_consumer/ucrf_consumer_3_74.yaml`). If a bureau differs, add a per-bureau layout override (`extends:`) | First live submission |
+| CIC sample file | Re-confirm the encoding decision: segment tags without a length prefix (`PNN01`), no separator or line break between records (`encoding:` in `submissions/types/consumer/layout.yaml`). If a bureau differs, add a per-bureau layout override (`extends:`) | First live submission |
 | Re-runs and retention | Keep every version of a generated file, or only the latest? Retention period (90 days today) | — |
 | TH history | Is a one-time historical load of account history needed? If so: should validation findings on history rows (e.g. an invalid asset class) drop TH fields like other segments? Today TH is written as loaded (`drops: false` and `check: not_null` in the layout) | — |
 

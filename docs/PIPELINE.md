@@ -22,28 +22,38 @@
 
 | Layer | Per NBFC? | Owns | Never does |
 |---|---|---|---|
-| **Adapter** | Yes: one mapping file + lookups | Joins, filtering, unpivoting, client code → UCRF code | Spec rules, rejecting records |
+| **Adapter** | Yes: one mapping file per submission type + lookups | Joins, filtering, unpivoting, client code → canonical value | Spec rules, rejecting records |
 | **Canonical model** | No (core, versioned) | The data contract every later layer uses | — |
 | **Snapshot** | No | Freezing the canonical data for one run | — |
 | **Validation** | Core rules: no. Custom rules and policy: yes | Rules, outcomes, cascade, findings | Formatting |
-| **Formatter** | No | Segments, encoding, header/trailer, bureau identity | Validation decisions |
+| **Formatter** | No | Segments, encoding, header/trailer, canonical value → file code, bureau identity | Validation decisions |
 
 **Dependency rule:** validation and the formatter depend only on the canonical model, never on each other or on adapters. Only the run orchestrator knows all layers.
 
 **Change test:** changes when an NBFC's schema changes → adapter. Changes when the UCRF spec changes → validation/formatter. Changes when the product changes → canonical model.
 
+**Submission types** are self-contained folders, `submissions/types/<type>/` (consumer now; commercial, NeSL later), nothing shared between them:
+
+| File | Holds | Master |
+|---|---|---|
+| `codes.yaml` | Canonical value → this type's file code, per code list; named groups of values (e.g. `card_account_type`) | Initial data only: seeded into `ref_code_translation` / `ref_code_group`; **the database is the master** (the seed inserts missing rows, never overwrites) |
+| `requirements.yaml` | Canonical columns the type needs (generated REQUIRED rules, mapping coverage) | Repo |
+| `rules.yaml` | The type's rule pack (rules, categories, record decision) | Repo |
+| `layout.yaml` | The file layout, rendered by a generic engine | Repo |
+| `pipeline.py`, `file.py` | Wiring: mapping → snapshot → rules → file. The registry discovers each folder with a `pipeline.py` | Repo |
+
 ## 3. Canonical model (core)
 
 ### 3.1 Single source of truth
 
-`submissions/canonical/model.yaml` defines every entity, column, type, required flag and allowed code list. **Everything is derived from it** so nothing drifts:
+`submissions/canonical/model.yaml` defines every entity, column, type, key and code list, for **all** submission types. It holds no type knowledge (what a type requires or how it codes a value lives in the type folder). **Everything is derived from it** so nothing drifts:
 
 | Derived artifact | How | Used by |
 |---|---|---|
 | SQLAlchemy tables for `c_*` | Built at import (`canonical/schema.py`) | Snapshot, validation, formatter |
 | Record dataclasses (`AccountRecord`, …) | Built at import | Python rules, formatter |
-| Reference data `ref_code`, `ref_state_pin` (Appendix C) | Built at import | Validation (enum, PIN/state) |
-| MySQL migration | `python -m submissions.canonical.generate --out migrations/NNN_*.sql`; a test fails if the committed file is stale | Deployment |
+| Reference data `ref_code`, `ref_state_pin` | Seeded after migrations (`submissions.reference`, insert-missing only) | Validation (code lists, PIN/state) |
+| MySQL DDL | `python -m submissions.canonical.generate` prints it: copy what changed into a new `migrations/NNN_*.sql` (applied migrations are never edited). Parity: `tests/test_migrate.py` against MySQL | Deployment |
 | Mapping template + contract check | `clients/_template/`, `submissions.adapters.check` | Adapter onboarding |
 
 Snapshot tables have a surrogate `row_id`, a `snapshot_id` foreign key with `ON DELETE CASCADE` (purging a snapshot purges its rows), indexes led by `snapshot_id`, and **no NOT NULL or unique constraints**. The snapshot holds what the source holds, and validation judges it. "Required" is a validation rule, not a DB constraint.
@@ -52,17 +62,17 @@ It is versioned (`canonical_version`). A change is a product release, not a clie
 
 ### 3.2 Entities
 
-Normalised and spec-aligned (UCRF codes), but not tied to the file layout. Every table carries `snapshot_id`.
+Normalised, not tied to any file layout. Code columns hold **canonical values** (`FEMALE`, `HOUSING_LOAN`, `MAHARASHTRA`), one taxonomy per concept for every type: mappings translate client codes in, each layout translates out (`translate:`). Every table carries `snapshot_id`.
 
 | Table | Grain | Key fields |
 |---|---|---|
 | `c_party` | borrower | party_key, full_name, birth_date, gender, occupation, income, income_basis, income_period |
-| `c_party_identifier` | party × ID | id_type (01–10), id_number, issue_date, expiry_date |
+| `c_party_identifier` | party × ID | id_type (PAN, PASSPORT, …), id_number, issue_date, expiry_date |
 | `c_party_phone` | party × phone | number, extension, phone_type, priority |
 | `c_party_email` | party × email | email, priority |
 | `c_party_address` | party × address | line1–5, state_code, pin_code, address_category, residence_code, priority |
 | `c_account` | account | account_key, account_number, account_type, dates (opened, last payment, closed, reported), amounts (sanctioned, balance, overdue, limits, EMI, write-off, settlement, collateral), DPD, asset class, facility status, suit status, ROI, tenure, payment frequency, previous-value fields (TL.16–20) |
-| `c_account_holder` | account × party | ownership_indicator (1–5). **One UCRF record per row.** |
+| `c_account_holder` | account × party | ownership_indicator (INDIVIDUAL, JOINT, …). **One UCRF record per row.** |
 | `c_account_history` | account × month | TH fields (optional) |
 | `c_extension_attribute` | entity × key | NBFC-specific values for custom rules (`entity, entity_key, attr_name, attr_value`) |
 
@@ -72,7 +82,7 @@ Amounts are `DECIMAL(20,2)` in the model. The formatter rounds to whole rupees p
 
 ### 4.1 Mapping file
 
-One YAML per NBFC states **how its schema reaches the canonical model**. A **base mapping** covers the standard LMS schema, and each NBFC file only **overrides** what differs.
+One YAML per NBFC **and submission type** (`clients/<tenant>/consumer.yaml`; `tenant.mapping_path` names the folder) states **how its schema reaches the canonical model**. A **base mapping** (`clients/_base/<type>.yaml`) covers the standard LMS schema, and each NBFC file only **overrides** what differs. Commercial vs consumer is usually a `where:` filter on the same LMS tables. The format reference is `submissions/adapters/mapping.py`; the sketch below is the original design.
 
 ```yaml
 tenant: nbfc_017
@@ -92,22 +102,22 @@ party_phone:
     - { number: c.alt_mobile, phone_type: "01", priority: 2 }
 extensions:
   account: { scheme_code: x.scheme_cd }        # → c_extension_attribute
-lookups:                                       # client code → UCRF code (loaded into lookup tables)
-  account_type: { HL: "02", PL: "05", GL: "07" }
-  gender: { M: "2", F: "1", T: "3" }
+lookups:                                       # client code → canonical value
+  account_type: { HL: HOUSING_LOAN, PL: PERSONAL_LOAN, GL: GOLD_LOAN }
+  gender: { M: MALE, F: FEMALE, T: TRANSGENDER }
 ```
 
 ### 4.2 Mapping compiler
 
 - Compiles base + overrides into **plain MySQL**: one `SELECT` per canonical entity (several named SELECTs combine with `UNION ALL`, which is how wide columns become rows). Each statement is readable, reviewed and committed under `clients/<tenant>/generated/`. A hash of the compiled SQL is stored on each snapshot as `mapping_version`.
-- **Lookups** compile inline to `CASE <expr> WHEN 'HL' THEN '02' … ELSE <expr> END`. There's no lookup table, so it works whichever server the source is on. An unmapped value passes through as the raw source value, so validation reports it (not a valid code) rather than dropping it.
+- **Lookups** compile inline to `CASE <expr> WHEN 'HL' THEN 'HOUSING_LOAN' … ELSE <expr> END`. There's no lookup table, so it works whichever server the source is on. Lookup values must be canonical values of the column's code list (checked when the mapping loads). An unmapped value passes through as the raw source value, so validation reports it (not a valid code) rather than dropping it; a client code that already equals a canonical value needs no lookup.
 - **Extract strategy** is configurable:
   - `insert_select`: our schema is on the same MySQL server/cluster, so run `INSERT INTO c_* SELECT …` directly (fastest).
   - `stream`: the source is a separate read replica, so stream the `SELECT` results in batches into our `c_*` tables.
 
 ### 4.3 Contract check
 
-`check-mapping` verifies that every required canonical field is mapped, the SQL compiles against the schema (`EXPLAIN`), result types are compatible, and every distinct source code has a lookup entry.
+`check-mapping` verifies that every canonical field the type requires (`requirements.yaml`) is mapped, the SQL compiles against the schema (`EXPLAIN`), result types are compatible, and every distinct source code has a lookup entry.
 
 ## 5. Canonical snapshot
 
@@ -125,8 +135,8 @@ lookups:                                       # client code → UCRF code (load
 ### 6.1 Rule catalogue
 
 **As built:**
-- **Built-in rules ship with the code** as a versioned YAML pack, `submissions/validation/packs/ucrf_consumer_3_74.yaml`, like the canonical model.
-- **REQUIRED and ENUM rules are generated** from `model.yaml` (one per required column and per code column). The pack sets their outcomes per entity or column.
+- **Built-in rules ship with the code** as a versioned YAML pack, `submissions/types/consumer/rules.yaml`, like the canonical model.
+- **REQUIRED and ENUM rules are generated**: REQUIRED from the type's `requirements.yaml`, ENUM for every code column whose list the type translates (a value without an active row in `ref_code_translation` for the snapshot's type cannot be written). The pack sets their outcomes per entity or column. Pack SQL uses canonical values and `ref_code_group` (`:submission_type` is bound by the engine).
 - **`validation_rule` holds only per-tenant custom SQL rules.** Their IDs may not start with `UCRF.`.
 - **`validation_policy`** overrides the enabled flag and/or outcome of any rule per tenant.
 - **Rule kinds:**
@@ -188,13 +198,14 @@ The file format is **data, not code**. A layout YAML describes it, and a generic
 
 | Part | Where | What it holds |
 |---|---|---|
-| Layout | `submissions/formats/ucrf_consumer/ucrf_consumer_3_74.yaml` | The whole format: encoding (tag style, record separator, record end, trailer), the 146-byte header, the segments in order with their sequence labels, repeat caps and sort order, and every field (tag, source, format, max length, cap, default, conditions) |
+| Layout | `submissions/types/consumer/layout.yaml` | The whole format: encoding (tag style, record separator, record end, trailer), the 146-byte header, the segments in order with their sequence labels, repeat caps and sort order, and every field (tag, source, `translate`, format, max length, cap, default, conditions) |
 | Engine | `submissions/formats/tudf/` | Generic: `layout.py` loads and checks the YAML; `engine.py` renders; `snapshot.py` reads accepted records and validation drops; `parser.py` reads a file back |
 | Formatters | `submissions/formats/tudf/formatters.py` | The named algorithms a layout applies: dates, amounts, signed amounts, rate, lookup maps; word fitting for names and address lines; the phone list, ID number and PIN rules |
 
 **How it works:**
 - **Input:** a validated snapshot plus a `BureauProfile`. Only records whose `record_outcome` is accepted are written, with REJECT_FIELD and REJECT_SEGMENT drops applied (history rows are written as loaded).
 - **Output:** the header, then one record per account × holder (the layout's segments, then the record end), then the trailer. Repeating segments are numbered in the order written; an instance with no value for a `required` field is left out.
+- **Codes:** `translate: <code_list>` on a field writes the type's file code for the canonical value (active rows of `ref_code_translation`); no active code leaves the field out (validation has already flagged it). `when`, `default` and formatter args use canonical values.
 - **Bureau stamping:** member ID, header segment tag and file name come only from the bureau profile.
 - **Byte-identical duplicate records** are counted and left out (spec §1.4).
 
@@ -208,7 +219,7 @@ A new algorithm is a new named formatter, which any layout can then use. Commerc
 ## 8. Onboarding an NBFC
 
 1. `introspect --schema nbfc_017`: diff against the base LMS schema and list the differences.
-2. Write `clients/nbfc_017/mapping.yaml` (overrides only) and fill in the lookups.
+2. Write `clients/nbfc_017/consumer.yaml` (overrides only) and fill in the lookups.
 3. `check-mapping`: coverage, compile, types, unmapped codes.
 4. `extract --dry-run`: row counts, null rates, unmapped-value report.
 5. Validate-only run: review the findings with the NBFC.
@@ -218,15 +229,17 @@ A new algorithm is a new named formatter, which any layout can then use. Commerc
 
 ```
 submissions/
-  canonical/                    # model.yaml (source of truth), model loader, generated dataclasses, DDL/ref generator
+  canonical/                    # model.yaml (source of truth), model loader, generated dataclasses, DDL helper
   adapters/                     # mapping loader (base + override), compiler, lookups, extract runner, check-mapping
   snapshot/                     # snapshot lifecycle, retention
-  validation/                   # rule catalogue, SQL runner, python rules, ucrf pack, cascade, policy, summary
+  validation/                   # rule engine, SQL runner, python rules, cascade, policy, summary
   formats/tudf/                 # generic TUDF engine: layout loader, formatters, renderer, parser
-  formats/ucrf_consumer/        # ucrf_consumer_3_74.yaml (the consumer file layout)
+  types/consumer/               # codes, requirements, rules, layout (YAML) + pipeline.py, file.py
+  reference.py                  # reference data seed (insert-missing) and active translations
 clients/
-  _base/mapping.yaml            # standard LMS schema mapping
-  <tenant>/mapping.yaml, generated/*.sql
+  _base/consumer.yaml           # standard LMS schema mapping, per submission type
+  _template/consumer.yaml       # copied for a new NBFC
+  <tenant>/consumer.yaml, generated/consumer/*.sql
 ```
 
 ## 10. Open questions

@@ -29,8 +29,8 @@ _MESSAGES = {  # used while the default pattern applies; a changed pattern is na
     "id_pattern_ckyc": "CKYC must be up to 15 letters/digits",
     "id_pattern_gram_g": "G RAM G must look like SS-DD-BBB-GGG-VVV/HHHSurname",
 }
-_BY_TYPE = {"01": "id_pattern_pan", "02": "id_pattern_passport", "03": "id_pattern_voter", "09": "id_pattern_ckyc",
-            "10": "id_pattern_gram_g"}
+_BY_TYPE = {"PAN": "id_pattern_pan", "PASSPORT": "id_pattern_passport", "VOTER_ID": "id_pattern_voter",
+            "CKYC": "id_pattern_ckyc", "G_RAM_G": "id_pattern_gram_g"}      # canonical id_type values
 
 
 @lru_cache(maxsize=64)
@@ -51,7 +51,8 @@ def normalise(id_number: str) -> str:
 
 
 def id_number_problem(id_type: str, id_number: str | None, patterns: dict | None = None) -> str | None:
-    """Reason the ID number is invalid for its type, or None. Types 04/05 are not validated.
+    """Reason the ID number is invalid for its (canonical) type, or None. Driving licence and ration card are not
+    validated.
 
     `patterns` overrides DEFAULT_PATTERNS (rule parameters id_pattern_*).
     """
@@ -59,7 +60,7 @@ def id_number_problem(id_type: str, id_number: str | None, patterns: dict | None
     n = normalise(raw)
     if not n:
         return "empty ID number"
-    if id_type == "06":
+    if id_type == "AADHAAR":
         if not (len(n) == 12 and n.isdigit()):
             return "Aadhaar must be 12 digits"
         return None if verhoeff_valid(n) else "Aadhaar check digit (Verhoeff) is wrong"
@@ -67,7 +68,7 @@ def id_number_problem(id_type: str, id_number: str | None, patterns: dict | None
     if name is None:
         return None
     pattern = (patterns or {}).get(name) or DEFAULT_PATTERNS[name]
-    value = raw.replace(" ", "") if id_type == "10" else n           # G RAM G keeps its delimiters
+    value = raw.replace(" ", "") if id_type == "G_RAM_G" else n      # G RAM G keeps its delimiters
     if _compiled(pattern).match(value):
         return None
     return _MESSAGES[name] if pattern == DEFAULT_PATTERNS[name] else f"does not match the pattern {pattern}"

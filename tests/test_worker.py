@@ -126,10 +126,10 @@ def test_unsupported_type_fails_the_row(worker, requests_repo):
 
 
 def test_broken_mapping_fails_row_and_snapshot(worker, requests_repo, tenant_repo, engine, tmp_path):
-    bad = tmp_path / "bad.yaml"
-    bad.write_text(f'canonical_version: "1.0"\nextends: {(ROOT / "clients" / "_base" / "mapping.yaml").as_posix()}\n'
+    bad = tmp_path / "consumer.yaml"
+    bad.write_text(f'submission_type: CONSUMER\ncanonical_version: "1.0"\nextends: {(ROOT / "clients" / "_base" / "consumer.yaml").as_posix()}\n'
                    "entities: {account: {columns: {days_past_due: a.no_such_column}}}\n", encoding="utf-8")
-    tenant_repo.upsert(Tenant("nbfc_001", "Demo NBFC One", "nbfc_001", str(bad)))
+    tenant_repo.upsert(Tenant("nbfc_001", "Demo NBFC One", "nbfc_001", str(tmp_path)))
     batch = requests_repo.create_batch("nbfc_001", AS_OF, M.VALIDATE, [T.CONSUMER])
     worker.run_once()
     (row,) = requests_repo.list_batch(batch)

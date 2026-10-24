@@ -7,13 +7,13 @@ from pathlib import Path
 
 from submissions.adapters.extract import run_extract
 from submissions.adjustments.summary import adjustments_csv
-from submissions.adapters.mapping import load_mapping
+from submissions.adapters.mapping import load_mapping, mapping_file
 from submissions.bureaus import BureauProfile
-from submissions.formats.ucrf_consumer import build_file
 from submissions.pipeline.base import Services
 from submissions.requests import RequestResult, SubmissionRequest
 from submissions.snapshot import Snapshot
 from submissions.tenants import Tenant
+from submissions.types.consumer.file import build_file
 from submissions.validation.engine import ValidationResult, validate_snapshot
 from submissions.validation.results import FindingFilter, findings_csv
 from submissions.validation.rules import load_rule_set
@@ -24,7 +24,7 @@ class ConsumerPipeline:
                        owner: str) -> tuple[int, ValidationResult]:
         if not tenant.mapping_path:
             raise ValueError(f"Tenant {tenant.tenant_id} has no mapping file configured")
-        mapping = load_mapping(services.base_dir / tenant.mapping_path)
+        mapping = load_mapping(mapping_file(services.base_dir, tenant.mapping_path, request.submission_type))
         extract = run_extract(tenant=tenant, mapping=mapping, submission_type=request.submission_type,
                               as_of_date=request.as_of_date, app_engine=services.app_engine,
                               source_engine=services.source_engine, snapshots=services.snapshots, owner=owner,
@@ -53,3 +53,6 @@ class ConsumerPipeline:
                              exceptions_file_path=exceptions_uri, total_records=stats.total_records,
                              accepted_records=stats.written, rejected_records=stats.rejected,
                              duplicate_records=stats.duplicates)
+
+
+PIPELINE = ConsumerPipeline()

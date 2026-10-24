@@ -22,8 +22,8 @@ $env:REGENERATE_GOLDEN = "1"; .\.venv\Scripts\python -m pytest tests/test_ucrf_g
 .\.venv\Scripts\python -m submissions.api                   # local API + pages, http://127.0.0.1:5000 (SUBMISSIONS_AUTH=none)
 .\.venv\Scripts\python -m submissions.worker [--once]       # local polling worker (replaces the S3-triggered Lambdas)
 .\.venv\Scripts\python -m submissions.migrate               # apply migrations/NNN_*.sql
-.\.venv\Scripts\python -m submissions.adapters.check   clients/<t>/mapping.yaml --schema <t> --as-of 2026-09-30
-.\.venv\Scripts\python -m submissions.adapters.compiler clients/<t>/mapping.yaml --schema <t> --out clients/<t>/generated
+.\.venv\Scripts\python -m submissions.adapters.check   clients/<t>/consumer.yaml --schema <t> --as-of 2026-09-30
+.\.venv\Scripts\python -m submissions.adapters.compiler clients/<t>/consumer.yaml --schema <t> --out clients/<t>/generated/consumer
 .\deploy\deploy.ps1 [-FrontendOnly | -BackendOnly]           # backend first when both
 ```
 
@@ -41,16 +41,23 @@ Migration/table parity against real MySQL: set `SUBMISSIONS_TEST_MYSQL_URL` to a
   handles schedules, recovery (re-dispatches stale PENDING), retention, `migrate` and `users` admin commands. Locally there is no dispatch; the polling worker picks up PENDING rows.
 - **Pipeline layering (strict):** validation and the formatter depend only on the canonical model, never on each other or
   on adapters. NBFC schema changes → adapter mapping; UCRF spec changes → validation/formatter; product changes → canonical model.
-- **Canonical model** `submissions/canonical/model.yaml` is the single source of truth: `c_*` SQLAlchemy tables, record
-  dataclasses, ref data, generated REQUIRED/ENUM rules all derive from it at import. Changing it means bumping
-  `canonical_version` and adding a migration (`python -m submissions.canonical.generate --out ...`); a test fails if the committed migration is stale.
-- **Adapters:** `clients/_base/mapping.yaml` maps the standard LMS; `clients/<tenant>/mapping.yaml` lists only overrides.
-  Compiled to plain MySQL SELECTs committed under `clients/<tenant>/generated/` (regenerate after editing a mapping).
+- **Canonical model** `submissions/canonical/model.yaml` is the single model for all submission types: entities,
+  columns, keys and code lists (`c_*` tables, record dataclasses and `ref_code` derive from it); no type knowledge.
+  Code columns hold **canonical values** (`FEMALE`, `HOUSING_LOAN`), never file codes. Changing it means bumping
+  `canonical_version` and a new migration (`python -m submissions.canonical.generate` prints the DDL to copy from).
+- **Submission types:** one self-contained folder each, `submissions/types/<type>/`: `codes.yaml` (canonical value →
+  file code; seeded into `ref_code_translation` / `ref_code_group`), `requirements.yaml` (generated REQUIRED rules,
+  mapping coverage), `rules.yaml`, `layout.yaml`, `pipeline.py` (discovered by the registry). Nothing shared between types.
+- **Reference data master = database:** `submissions/reference.py` seeds after migrations, **insert-missing only** (edits
+  in the tables are never overwritten). Files use the active translations (`translate:` on a layout field).
+- **Adapters:** one mapping per type: `clients/_base/consumer.yaml` maps the standard LMS; `clients/<tenant>/consumer.yaml`
+  lists only overrides; `tenant.mapping_path` is the client folder. Lookups give canonical values (checked at load).
+  Compiled to plain MySQL SELECTs committed under `clients/<tenant>/generated/<type>/` (regenerate after editing a mapping).
   Exceptions are joined into the extract in SQL (`submissions/adjustments/sql.py`), so validation/formatter need no knowledge of them.
-- **Validation:** built-in rules in `submissions/validation/packs/ucrf_consumer_3_74.yaml`; algorithmic ones in
+- **Validation:** built-in rules in `submissions/types/consumer/rules.yaml`; algorithmic ones in
   `python_rules.py` / `checks/`; per-tenant custom SQL rules in `validation_rule` (IDs must not start with `UCRF.`);
   `validation_policy` overrides enabled/outcome per tenant. SQL rules must use `:snapshot_id`. A cascade computes `record_outcome`.
-- **Formatter:** file format is data — `submissions/formats/ucrf_consumer/ucrf_consumer_3_74.yaml` rendered by the generic
+- **Formatter:** file format is data — `submissions/types/consumer/layout.yaml` rendered by the generic
   TUDF engine in `submissions/formats/tudf/`. Bureau files differ only by member ID, header tag and file name (from `bureau_profile`).
   `tests/test_ucrf_golden.py` compares output byte-for-byte with `tests/golden/`.
 - **Tenancy:** isolation by schema at extract; everything after carries `tenant_id` / `snapshot_id` and must be scoped by it.

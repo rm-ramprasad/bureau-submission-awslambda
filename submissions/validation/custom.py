@@ -21,7 +21,7 @@ from submissions.adapters.compiler import quote
 from submissions.canonical.definition import canonical_model
 from submissions.db import utcnow
 from submissions.enums import Outcome, SubmissionType
-from submissions.validation.rules import _KEYS, Rule, _check_rule
+from submissions.validation.rules import Rule, _check_rule
 from submissions.validation.tables import validation_rule
 
 CHECKS = {
@@ -172,7 +172,7 @@ def compile_sql(d: Definition) -> str:
     if d.when_field:
         when_col = _column(d.entity, d.when_field)
         bad += f" AND x.{d.when_field} IN ({_list(when_col, d.when_values, 'Condition values')})"
-    acct, party = _KEYS[d.entity]
+    acct, party = canonical_model().entities[d.entity].key_exprs()
     table = canonical_model().entities[d.entity].table
     return (f"SELECT x.row_id, {acct} AS account_key, {party} AS party_key, {x} AS value\n"
             f"FROM {table} x\nWHERE x.snapshot_id = :snapshot_id AND {bad}")

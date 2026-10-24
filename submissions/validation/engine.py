@@ -6,24 +6,18 @@ results for the snapshot, so a snapshot can be re-validated after a policy chang
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 from sqlalchemy import Connection, Engine, delete, func, insert, select, text
 
-from submissions.canonical.schema import ENTITY_TABLES
 from submissions.enums import Outcome, RecordOutcome, SnapshotStatus
 from submissions.snapshot import SnapshotRepository
+from submissions.validation.cascades import CASCADES
 from submissions.validation.parameters import load_parameters, render_message
 from submissions.validation.python_rules import PYTHON_RULES, RuleContext
-from submissions.validation.rules import Rule
+from submissions.validation.rules import Cascade, Rule, builtin_pack
 from submissions.validation.tables import record_outcome, validation_finding, validation_summary
-
-QUALIFYING_ID_TYPES = {"01", "02", "03", "04", "05", "06", "09", "10"}
-MOBILE = "01"
-SEGMENT_OUTCOMES = {Outcome.REJECT_SEGMENT}
-RECORD_OUTCOMES = {Outcome.REJECT_RECORD}
 
 _INSERT_SQL_FINDINGS = """INSERT INTO validation_finding
     (snapshot_id, rule_id, entity, row_id, account_key, party_key, segment, field, outcome, value, message)
@@ -48,9 +42,10 @@ class ValidationResult:
     findings: dict[str, int]           # outcome -> count
 
 
-def _params(snapshot_id: int, as_of_date: date, parameters: dict) -> dict:
-    """Bind values for SQL rules: the snapshot, dates, and the rule parameters (:name)."""
-    return {**parameters, "snapshot_id": snapshot_id, "as_of_date": as_of_date,
+def _params(snapshot_id: int, as_of_date: date, parameters: dict, submission_type: str) -> dict:
+    """Bind values for SQL rules: the snapshot, its type (for ref_code_translation / ref_code_group), dates, and
+    the rule parameters (:name)."""
+    return {**parameters, "snapshot_id": snapshot_id, "submission_type": submission_type, "as_of_date": as_of_date,
             "one_year_before": as_of_date - timedelta(days=365)}
 
 
@@ -73,100 +68,27 @@ def _run_python_rule(conn: Connection, rule: Rule, ctx: RuleContext) -> None:
         conn.execute(insert(validation_finding), rows)
 
 
-def _applies(f, account_key: str, party_key: str) -> bool:
-    if f.account_key is None and f.party_key is None:
-        return False
-    return f.account_key in (None, account_key) and f.party_key in (None, party_key)
-
-
-def _cascade(conn: Connection, snapshot_id: int, rules: dict[str, Rule], parameters: dict) -> tuple[int, int]:
-    """Decide ACCEPTED/REJECTED per record (account x holder) and write record_outcome."""
-    def rows(entity, *cols):
-        t = ENTITY_TABLES[entity]
-        return conn.execute(select(*(t.c[c] for c in cols)).where(t.c.snapshot_id == snapshot_id)).all()
-
-    opened = {r.account_key: r.date_opened for r in rows("account", "account_key", "date_opened")}
-    phones, ids, addresses = defaultdict(list), defaultdict(list), defaultdict(list)
-    for r in rows("party_phone", "row_id", "party_key", "phone_type"):
-        phones[r.party_key].append(r)
-    for r in rows("party_identifier", "row_id", "party_key", "id_type"):
-        ids[r.party_key].append(r)
-    for r in rows("party_address", "row_id", "party_key"):
-        addresses[r.party_key].append(r)
-
-    f = validation_finding.c
-    findings = conn.execute(select(f.rule_id, f.entity, f.row_id, f.account_key, f.party_key, f.outcome).where(
-        f.snapshot_id == snapshot_id,
-        f.outcome.in_([str(o) for o in SEGMENT_OUTCOMES | RECORD_OUTCOMES]) | (f.rule_id == "UCRF.PN.SINGLE_WORD_NAME"),
-    )).all()
-    record_rejects = [x for x in findings if x.outcome in RECORD_OUTCOMES]
-    segment_rejects = defaultdict(list)                    # (entity, row_id) -> account restriction (None = all)
-    for x in findings:
-        if x.outcome in SEGMENT_OUTCOMES and x.row_id is not None:
-            segment_rejects[(x.entity, x.row_id)].append(x.account_key)
-    single_word = {x.party_key for x in findings if x.rule_id == "UCRF.PN.SINGLE_WORD_NAME"}
-
-    holders = {}
-    for r in rows("account_holder", "row_id", "account_key", "party_key"):
-        holders.setdefault((r.account_key, r.party_key), r.row_id)
-
-    def enabled(rule_id):
-        rule = rules.get(rule_id)
-        return rule if rule is not None and rule.enabled else None
-
-    outcomes, cascade_findings, accepted = [], [], 0
-    for (account_key, party_key), holder_row in holders.items():
-        def ok(entity, row_id):
-            return not any(a is None or a == account_key for a in segment_rejects.get((entity, row_id), []))
-
-        reasons = [x.rule_id for x in record_rejects if _applies(x, account_key, party_key)]
-        valid_ids = [i for i in ids[party_key] if ok("party_identifier", i.row_id)]
-        valid_phones = [p for p in phones[party_key] if ok("party_phone", p.row_id)]
-        checks = [
-            ("UCRF.REC.NO_VALID_ADDRESS", not any(ok("party_address", a.row_id) for a in addresses[party_key])),
-            ("UCRF.REC.NO_PHONE_OR_ID", (opened.get(account_key) or date.min) >= parameters["phone_or_id_required_from"]
-             and not valid_phones and not any(i.id_type in QUALIFYING_ID_TYPES for i in valid_ids)),
-            ("UCRF.REC.SINGLE_WORD_NAME", party_key in single_word and not valid_ids
-             and not any(p.phone_type == MOBILE for p in valid_phones)),
-        ]
-        for rule_id, failed in checks:
-            rule = enabled(rule_id)
-            if failed and rule:
-                cascade_findings.append(dict(snapshot_id=snapshot_id, rule_id=rule_id, entity=rule.entity,
-                                             row_id=holder_row, account_key=account_key, party_key=party_key,
-                                             segment=rule.segment, field=rule.field, outcome=str(rule.outcome),
-                                             value=None, message=rule.message[:500]))
-                if rule.outcome in RECORD_OUTCOMES:
-                    reasons.append(rule_id)
-        rejected = bool(reasons)
-        accepted += not rejected
-        outcomes.append(dict(snapshot_id=snapshot_id, account_key=account_key, party_key=party_key,
-                             outcome=str(RecordOutcome.REJECTED if rejected else RecordOutcome.ACCEPTED),
-                             reason_rule_id=reasons[0] if reasons else None))
-    if cascade_findings:
-        conn.execute(insert(validation_finding), cascade_findings)
-    if outcomes:
-        conn.execute(insert(record_outcome), outcomes)
-    return accepted, len(outcomes) - accepted
-
-
 def _clear(conn: Connection, snapshot_id: int) -> None:
     for t in (validation_finding, validation_summary, record_outcome):
         conn.execute(delete(t).where(t.c.snapshot_id == snapshot_id))
 
 
 def run_validation(conn: Connection, snapshot_id: int, as_of_date: date, rules: list[Rule],
-                   parameters: dict) -> ValidationResult:
+                   parameters: dict, cascade: Cascade, submission_type: str) -> ValidationResult:
     _clear(conn, snapshot_id)
     rules = [replace(r, message=render_message(r.message, parameters)) for r in rules]   # {parameter} in messages
-    params, ctx = _params(snapshot_id, as_of_date, parameters), RuleContext(conn, snapshot_id, as_of_date, parameters)
+    params = _params(snapshot_id, as_of_date, parameters, submission_type)
+    ctx = RuleContext(conn, snapshot_id, as_of_date, parameters)
     active = [r for r in rules if r.enabled]
     for rule in active:
         if rule.kind == "sql":
             _run_sql_rule(conn, rule, params)
         elif rule.kind == "python":
             _run_python_rule(conn, rule, ctx)
-    accepted, rejected = _cascade(conn, snapshot_id, {r.rule_id: r for r in rules}, parameters)
+    decide = CASCADES.get(cascade.name)
+    if decide is None:
+        raise ValidationError(f"Unknown cascade {cascade.name!r} (validation/cascades.py)")
+    accepted, rejected = decide(conn, snapshot_id, {r.rule_id: r for r in rules}, parameters, cascade.settings)
     f = validation_finding.c
     conn.execute(insert(validation_summary).from_select(
         ["snapshot_id", "rule_id", "outcome", "finding_count"],
@@ -205,7 +127,8 @@ def validate_snapshot(engine: Engine, snapshots: SnapshotRepository, snapshot_id
         parameters = load_parameters(engine, snap.tenant_id, snap.submission_type)
     try:
         with engine.begin() as conn:
-            result = run_validation(conn, snapshot_id, snap.as_of_date, rules, parameters)
+            result = run_validation(conn, snapshot_id, snap.as_of_date, rules, parameters,
+                                    builtin_pack(snap.submission_type).cascade, str(snap.submission_type))
     except Exception as exc:
         snapshots.mark_failed(snapshot_id, f"validation: {exc}")
         raise

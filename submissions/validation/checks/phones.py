@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 
 MULTI_SPLIT_RE = re.compile(r"[\\/,:;&]")
-MOBILE_TYPE = "01"
-NOT_CLASSIFIED = "00"
+MOBILE_TYPE = "MOBILE"                  # canonical phone_type values
+NOT_CLASSIFIED = "NOT_CLASSIFIED"
 
 
 def _is_sequence(d: str) -> bool:
@@ -44,7 +44,7 @@ def number_problem(raw: str, phone_type: str | None) -> str | None:
 
 
 def valid_numbers(raw: str | None, phone_type: str | None) -> list[str]:
-    """Numbers that survive the edits. Several numbers are allowed only for type 00 (not classified)."""
+    """Numbers that survive the edits. Several numbers are allowed only when the type is not classified."""
     if not raw or not raw.strip():
         return []
     parts = MULTI_SPLIT_RE.split(raw) if phone_type in (NOT_CLASSIFIED, None) else [raw]

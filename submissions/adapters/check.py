@@ -6,7 +6,7 @@ Reports:
             optional canonical entities not mapped
   rows      row count per canonical entity for the as-of date
 
-Usage:  python -m submissions.adapters.check clients/nbfc_002/mapping.yaml --schema nbfc_002 [--as-of 2026-09-30]
+Usage:  python -m submissions.adapters.check clients/nbfc_002/consumer.yaml --schema nbfc_002 [--as-of 2026-09-30]
         (reads the source via SUBMISSIONS_SOURCE_DATABASE_URL, falling back to SUBMISSIONS_DATABASE_URL)
 """
 

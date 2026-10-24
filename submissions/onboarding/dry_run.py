@@ -15,7 +15,7 @@ from pathlib import Path
 from sqlalchemy import Engine, delete, func, select
 
 from submissions.adapters.extract import run_extract
-from submissions.adapters.mapping import load_mapping
+from submissions.adapters.mapping import load_mapping, mapping_file
 from submissions.canonical.definition import canonical_model
 from submissions.canonical.schema import ENTITY_TABLES, extract_snapshot
 from submissions.enums import SubmissionType
@@ -23,7 +23,7 @@ from submissions.snapshot import SnapshotRepository
 from submissions.tenants import TenantRepository
 from submissions.validation.engine import validate_snapshot
 from submissions.validation.results import record_counts, summary
-from submissions.validation.rules import load_rule_set
+from submissions.validation.rules import builtin_pack, load_rule_set
 from submissions.validation.tables import validation_finding
 
 
@@ -56,15 +56,17 @@ def _null_rates(engine: Engine, snapshot_id: int) -> dict[str, dict[str, float]]
     return out
 
 
-def _unmapped(engine: Engine, snapshot_id: int, limit: int = 20) -> dict[str, list[str]]:
+def _unmapped(engine: Engine, snapshot_id: int, submission_type: SubmissionType | str,
+              limit: int = 20) -> dict[str, list[str]]:
     """Values flagged by the generated ENUM rules: usually client codes missing from a mapping lookup."""
+    enum_prefix = f"{builtin_pack(submission_type).prefix}ENUM."
     f = validation_finding.c
     with engine.connect() as conn:
         rows = conn.execute(select(f.rule_id, f.value).where(f.snapshot_id == snapshot_id,
-                                                             f.rule_id.like("UCRF.ENUM.%")).distinct()).all()
+                                                             f.rule_id.like(f"{enum_prefix}%")).distinct()).all()
     out: dict[str, list[str]] = {}
     for rule_id, value in rows:
-        key = rule_id.removeprefix("UCRF.ENUM.")
+        key = rule_id.removeprefix(enum_prefix)
         if len(out.setdefault(key, [])) < limit:
             out[key].append(value)
     return {k: sorted(v) for k, v in sorted(out.items())}
@@ -76,7 +78,7 @@ def dry_run(*, app_engine: Engine, source_engine: Engine, tenant_id: str, as_of_
     if not tenant.mapping_path:
         raise ValueError(f"Tenant {tenant_id} has no mapping file configured")
     snapshots = SnapshotRepository(app_engine)
-    extract = run_extract(tenant=tenant, mapping=load_mapping(base_dir / tenant.mapping_path),
+    extract = run_extract(tenant=tenant, mapping=load_mapping(mapping_file(base_dir, tenant.mapping_path, submission_type)),
                           submission_type=submission_type, as_of_date=as_of_date, app_engine=app_engine,
                           source_engine=source_engine, snapshots=snapshots, owner="dry-run")
     sid = extract.snapshot_id
@@ -85,7 +87,7 @@ def dry_run(*, app_engine: Engine, source_engine: Engine, tenant_id: str, as_of_
         report = DryRunReport(
             tenant_id=tenant_id, as_of_date=as_of_date.isoformat(), snapshot_id=sid if keep else None,
             mapping_version=extract.mapping_version, rows=extract.row_counts,
-            empty_columns=_null_rates(app_engine, sid), unmapped_codes=_unmapped(app_engine, sid),
+            empty_columns=_null_rates(app_engine, sid), unmapped_codes=_unmapped(app_engine, sid, submission_type),
             records=record_counts(app_engine, sid),
             top_rules=[(r.rule_id, r.outcome, r.finding_count) for r in summary(app_engine, sid)[:15]])
     finally:

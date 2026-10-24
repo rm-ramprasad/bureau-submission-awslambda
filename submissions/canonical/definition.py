@@ -46,9 +46,7 @@ class ColumnDef:
     length: int | None = None
     precision: int = 20
     scale: int = 2
-    required: bool = False
     code_list: str | None = None
-    ucrf: str | None = None
     description: str | None = None
 
 
@@ -59,9 +57,16 @@ class EntityDef:
     description: str
     columns: tuple[ColumnDef, ...]
     indexes: tuple[tuple[str, ...], ...]
+    account_key: str | None = None    # column holding the record's account key (keys: in the model), if any
+    party_key: str | None = None      # column holding the record's party key, if any
 
     def column(self, name: str) -> ColumnDef:
         return next(c for c in self.columns if c.name == name)
+
+    def key_exprs(self, alias: str = "x") -> tuple[str, str]:
+        """SQL for (account_key, party_key) of a row: findings point at records through these."""
+        return (f"{alias}.{self.account_key}" if self.account_key else "NULL",
+                f"{alias}.{self.party_key}" if self.party_key else "NULL")
 
 
 @dataclass(frozen=True)
@@ -103,8 +108,8 @@ def _parse_entity(name: str, raw: dict, code_lists: dict[str, CodeList]) -> Enti
         cw = f"{where}.{col_name}"
         if not NAME_RE.match(col_name) or col_name in {"row_id", "snapshot_id"}:
             raise ModelDefinitionError(f"{cw}: invalid or reserved column name")
-        unknown = set(spec) - {"type", "length", "precision", "scale", "required", "code_list", "ucrf", "description"}
-        if unknown:
+        unknown = set(spec) - {"type", "length", "precision", "scale", "code_list", "description"}
+        if unknown:                     # required / file field references belong to each submission type
             raise ModelDefinitionError(f"{cw}: unknown keys {sorted(unknown)}")
         col_type = spec.get("type")
         if col_type not in COLUMN_TYPES:
@@ -119,8 +124,7 @@ def _parse_entity(name: str, raw: dict, code_lists: dict[str, CodeList]) -> Enti
         elif "code_list" in spec:
             raise ModelDefinitionError(f"{cw}: code_list only applies to type code")
         columns.append(ColumnDef(
-            col_name, col_type, length, spec.get("precision", 20), spec.get("scale", 2), bool(spec.get("required")),
-            spec.get("code_list"), spec.get("ucrf"),
+            col_name, col_type, length, spec.get("precision", 20), spec.get("scale", 2), spec.get("code_list"),
             _text(spec["description"], cw) if spec.get("description") else None))
     if not columns:
         raise ModelDefinitionError(f"{where}: no columns")
@@ -129,7 +133,11 @@ def _parse_entity(name: str, raw: dict, code_lists: dict[str, CodeList]) -> Enti
     for ix in indexes:
         if not set(ix) <= names:
             raise ModelDefinitionError(f"{where}: index {list(ix)} uses unknown columns")
-    return EntityDef(name, raw["table"], _text(raw.get("description", ""), where), tuple(columns), indexes)
+    keys = raw.get("keys") or {}
+    if set(keys) - {"account", "party"} or not set(keys.values()) <= names:
+        raise ModelDefinitionError(f"{where}: keys must map account / party to columns of the entity")
+    return EntityDef(name, raw["table"], _text(raw.get("description", ""), where), tuple(columns), indexes,
+                     keys.get("account"), keys.get("party"))
 
 
 def parse_model(raw: dict) -> CanonicalModel:

@@ -1,11 +1,13 @@
-"""Tenant mapping files: how an NBFC schema reaches the canonical model.
+"""Tenant mapping files: how an NBFC schema reaches the canonical model, one file per submission type
+(clients/<tenant>/<type>.yaml, e.g. consumer.yaml; tenant.mapping_path names the folder).
 
 File format (YAML):
 
+    submission_type: CONSUMER               # columns it must map: submissions/types/<type>/requirements.yaml
     canonical_version: "1.0"
-    extends: ../_base/mapping.yaml          # optional; this file deep-merges over it
-    lookups:                                # client code -> UCRF code
-      gender: {M: "2", F: "1"}
+    extends: ../_base/consumer.yaml         # optional; this file deep-merges over it
+    lookups:                                # client code -> canonical value (model.yaml code lists)
+      gender: {M: MALE, F: FEMALE}
     entities:
       party:                                # single SELECT ...
         from: "{schema}.borrower_demographics b"
@@ -14,7 +16,7 @@ File format (YAML):
         columns:
           party_key: b.customer_id                          # SQL expression
           gender: {expr: b.sex, lookup: gender}             # translated through a lookup
-          address_category: {expr: b.addr_type, lookup: address_category, default: "04"}
+          address_category: {expr: b.addr_type, lookup: address_category, default: NOT_CATEGORIZED}
       party_identifier:                     # ... or several named SELECTs combined with UNION ALL
         selects:
           pan: {from: ..., where: ..., columns: {...}}
@@ -22,6 +24,7 @@ File format (YAML):
 
 Deep merge with `extends`: mappings merge key by key, any other value replaces, and `null` removes a key
 (e.g. `selects: {ckyc: null}` drops an inherited SELECT). Unmapped canonical columns become NULL.
+A lookup (and default) on a code column must give values of that column's canonical code list.
 """
 
 from __future__ import annotations
@@ -33,6 +36,8 @@ from pathlib import Path
 import yaml
 
 from submissions.canonical.definition import CanonicalModel, canonical_model
+from submissions.enums import SubmissionType
+from submissions.types import TypeDefinition, type_definition
 
 REQUIRED_ENTITIES = ("party", "account", "account_holder")
 _SELECT_KEYS = {"from", "where", "distinct", "columns"}
@@ -67,6 +72,7 @@ class EntityMapping:
 @dataclass(frozen=True)
 class Mapping:
     path: Path
+    submission_type: SubmissionType
     canonical_version: str
     lookups: dict[str, dict[str, str]]
     entities: dict[str, EntityMapping]
@@ -99,7 +105,7 @@ def _read_raw(path: Path, seen: tuple[Path, ...] = ()) -> dict:
     return raw
 
 
-def _column(entity: str, col: str, spec, lookups: dict) -> ColumnExpr:
+def _column(entity: str, col: str, spec, lookups: dict, code_list) -> ColumnExpr:
     where = f"entities.{entity}.columns.{col}"
     if isinstance(spec, (str, int, float)):
         return ColumnExpr(str(spec))
@@ -111,10 +117,17 @@ def _column(entity: str, col: str, spec, lookups: dict) -> ColumnExpr:
     if spec.get("lookup") and spec["lookup"] not in lookups:
         raise MappingError(f"{where}: unknown lookup {spec['lookup']!r}")
     default = spec.get("default")
+    if code_list is not None:
+        given = set(lookups.get(spec.get("lookup"), {}).values()) | ({str(default)} if default is not None else set())
+        unknown = given - code_list.values(active_only=False)
+        if unknown:
+            raise MappingError(f"{where}: not canonical {code_list.name} values: {sorted(unknown)} "
+                               "(lookups give canonical values, see submissions/canonical/model.yaml)")
     return ColumnExpr(str(spec["expr"]), spec.get("lookup"), None if default is None else str(default))
 
 
-def _select(entity: str, name: str, spec, model: CanonicalModel, lookups: dict) -> SelectMapping:
+def _select(entity: str, name: str, spec, model: CanonicalModel, lookups: dict,
+            type_def: TypeDefinition) -> SelectMapping:
     where = f"entities.{entity}" + (f".selects.{name}" if name != "main" else "")
     if not isinstance(spec, dict):
         raise MappingError(f"{where}: must be a mapping")
@@ -124,14 +137,15 @@ def _select(entity: str, name: str, spec, model: CanonicalModel, lookups: dict) 
     if not spec.get("from") or not spec.get("columns"):
         raise MappingError(f"{where}: 'from' and 'columns' are required")
     entity_def = model.entities[entity]
-    known = {c.name for c in entity_def.columns}
+    known = {c.name: c for c in entity_def.columns}
     columns = {}
     for col, col_spec in spec["columns"].items():
         if col not in known:
             raise MappingError(f"{where}.columns.{col}: not a column of canonical {entity}")
         if col_spec is not None:
-            columns[col] = _column(entity, col, col_spec, lookups)
-    missing = [c.name for c in entity_def.columns if c.required and c.name not in columns]
+            code_list = model.code_lists.get(known[col].code_list) if known[col].code_list else None
+            columns[col] = _column(entity, col, col_spec, lookups, code_list)
+    missing = [c for c in type_def.required.get(entity, ()) if c not in columns]
     if missing:
         raise MappingError(f"{where}: required canonical columns not mapped: {missing}")
     return SelectMapping(name, str(spec["from"]), spec.get("where"), bool(spec.get("distinct", False)), columns)
@@ -142,9 +156,14 @@ def parse_mapping(raw: dict, path: Path, model: CanonicalModel | None = None) ->
     if str(raw.get("canonical_version")) != model.version:
         raise MappingError(f"{path}: canonical_version {raw.get('canonical_version')!r} does not match the "
                            f"model ({model.version})")
-    unknown = set(raw) - {"canonical_version", "lookups", "entities"}
+    unknown = set(raw) - {"submission_type", "canonical_version", "lookups", "entities"}
     if unknown:
         raise MappingError(f"{path}: unknown top-level keys {sorted(unknown)}")
+    try:
+        submission_type = SubmissionType(raw.get("submission_type"))
+        type_def = type_definition(submission_type)
+    except ValueError:
+        raise MappingError(f"{path}: submission_type {raw.get('submission_type')!r} is not a known type") from None
     lookups = {}
     for name, values in (raw.get("lookups") or {}).items():
         for k, v in (values or {}).items():
@@ -161,17 +180,26 @@ def parse_mapping(raw: dict, path: Path, model: CanonicalModel | None = None) ->
         if "selects" in spec:
             if set(spec) - {"selects"}:
                 raise MappingError(f"entities.{entity}: use either 'selects' or a single from/columns, not both")
-            selects = [_select(entity, n, s, model, lookups) for n, s in spec["selects"].items() if s is not None]
+            selects = [_select(entity, n, s, model, lookups, type_def) for n, s in spec["selects"].items() if s is not None]
         else:
-            selects = [_select(entity, "main", spec, model, lookups)]
+            selects = [_select(entity, "main", spec, model, lookups, type_def)]
         if selects:
             entities[entity] = EntityMapping(entity, tuple(selects))
     missing = [e for e in REQUIRED_ENTITIES if e not in entities]
     if missing:
         raise MappingError(f"{path}: required entities not mapped: {missing}")
-    return Mapping(path, model.version, lookups, entities)
+    return Mapping(path, submission_type, model.version, lookups, entities)
 
 
 def load_mapping(path: str | Path, model: CanonicalModel | None = None) -> Mapping:
     path = Path(path)
     return parse_mapping(_read_raw(path), path, model)
+
+
+def mapping_file(base_dir: Path, mapping_path: str, submission_type: SubmissionType | str) -> Path:
+    """The tenant's mapping file for a type: <mapping_path>/<type>.yaml. mapping_path is the client folder; an older
+    value naming a file (clients/<t>/mapping.yaml) is read as its folder."""
+    folder = Path(mapping_path)
+    if folder.suffix in (".yaml", ".yml"):
+        folder = folder.parent
+    return base_dir / folder / f"{SubmissionType(submission_type).value.lower()}.yaml"

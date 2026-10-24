@@ -32,7 +32,7 @@ EXPECTED_RULE = {
 
 
 def extract(engine, lms_engine, tenant_repo, tenant_id):
-    return run_extract(tenant=tenant_repo.get(tenant_id), mapping=load_mapping(CLIENTS / tenant_id / "mapping.yaml"),
+    return run_extract(tenant=tenant_repo.get(tenant_id), mapping=load_mapping(CLIENTS / tenant_id / "consumer.yaml"),
                        submission_type="CONSUMER", as_of_date=AS_OF, app_engine=engine, source_engine=lms_engine,
                        snapshots=SnapshotRepository(engine), owner="test").snapshot_id
 

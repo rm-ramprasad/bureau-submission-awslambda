@@ -57,17 +57,17 @@ def test_messages_show_the_values():
 
 
 def test_id_patterns_can_be_overridden():
-    assert id_number_problem("01", "ABCDE1234F") is not None                  # 4th letter must be P or H
-    assert id_number_problem("01", "ABCPE1234F") is None
+    assert id_number_problem("PAN", "ABCDE1234F") is not None                  # 4th letter must be P or H
+    assert id_number_problem("PAN", "ABCPE1234F") is None
     loose = {"id_pattern_pan": r"^[A-Z]{5}[0-9]{4}[A-Z]$"}
-    assert id_number_problem("01", "ABCDE1234F", loose) is None
-    assert "does not match the pattern" in id_number_problem("01", "1234", loose)
-    assert id_number_problem("06", "123456789012", loose) is not None        # Aadhaar checksum is not a parameter
+    assert id_number_problem("PAN", "ABCDE1234F", loose) is None
+    assert "does not match the pattern" in id_number_problem("PAN", "1234", loose)
+    assert id_number_problem("AADHAAR", "123456789012", loose) is not None        # Aadhaar checksum is not a parameter
 
 
 # ---------------------------------------------------------------- effect on a real validation
 def validate(engine, lms_engine, tenant_repo):
-    sid = run_extract(tenant=tenant_repo.get("nbfc_001"), mapping=load_mapping(CLIENTS / "nbfc_001" / "mapping.yaml"),
+    sid = run_extract(tenant=tenant_repo.get("nbfc_001"), mapping=load_mapping(CLIENTS / "nbfc_001" / "consumer.yaml"),
                       submission_type="CONSUMER", as_of_date=AS_OF, app_engine=engine, source_engine=lms_engine,
                       snapshots=SnapshotRepository(engine), owner="t").snapshot_id
     result = validate_snapshot(engine, SnapshotRepository(engine), sid, load_rule_set(engine, "nbfc_001", "CONSUMER"))

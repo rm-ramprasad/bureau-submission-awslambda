@@ -73,7 +73,7 @@ def test_values_cannot_inject_sql():
 
 # ---------------------------------------------------------------- in a real validation
 def validated_snapshot(engine, lms_engine, tenant_repo):
-    sid = run_extract(tenant=tenant_repo.get("nbfc_001"), mapping=load_mapping(CLIENTS / "nbfc_001" / "mapping.yaml"),
+    sid = run_extract(tenant=tenant_repo.get("nbfc_001"), mapping=load_mapping(CLIENTS / "nbfc_001" / "consumer.yaml"),
                       submission_type="CONSUMER", as_of_date=AS_OF, app_engine=engine, source_engine=lms_engine,
                       snapshots=SnapshotRepository(engine), owner="t").snapshot_id
     validate_snapshot(engine, SnapshotRepository(engine), sid, load_rule_set(engine, "nbfc_001", "CONSUMER"))

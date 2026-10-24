@@ -11,7 +11,7 @@ from submissions.formats.tudf.engine import Renderer
 from submissions.formats.tudf.layout import LayoutError, parse_layout
 from submissions.formats.tudf.parser import parse_records
 from submissions.formats.tudf.snapshot import Drops, SnapshotData
-from submissions.formats.ucrf_consumer import layout as consumer_layout
+from submissions.types.consumer.file import layout as consumer_layout
 
 BASE = """
 layout: TEST
@@ -58,7 +58,7 @@ def layout(text: str = BASE, **changes):
     return parse_layout(raw)
 
 
-def render(lay, party=None, account=None, phones=(), drops=None):
+def render(lay, party=None, account=None, phones=(), drops=None, translations=None):
     party = party or Row(row_id=1, party_key="P1", full_name="Asha  Kumar", nickname=None)
     account = account or Row(row_id=1, account_key="A1", dpd=1200, limit=Decimal("5000"), paid=Decimal("0"),
                              kind="loan", grade=None)
@@ -66,7 +66,7 @@ def render(lay, party=None, account=None, phones=(), drops=None):
                         holders={("A1", "P1"): Row(row_id=1)}, children={"party_phone": {"P1": list(phones)}},
                         accepted=[("A1", "P1")], rejected=0, drops=drops or Drops())
     r = Renderer(lay, data, Row(header_segment_tag="TUDF", member_id="M1"), Row(as_of_date=date(2026, 9, 30),
-                                                                              cycle=None))
+                                                                              cycle=None), translations)
     return r, r.record("A1", "P1")
 
 
@@ -76,6 +76,18 @@ def test_fields_defaults_caps_conditions_and_alternatives():
     card = Row(row_id=1, account_key="A1", dpd=None, limit=Decimal("5000.4"), paid=Decimal("10"), kind="card", grade=1)
     _, rec = render(layout(), account=card)
     assert "TLT001" + "02045000" + "030210" + "0403STD" in rec                  # when, only_positive, lookup
+
+
+def test_translate_writes_the_file_code_after_defaults():
+    text = BASE.replace('- { tag: "02", source: nickname, default: "NONE" }',
+                        '- { tag: "02", source: gender, translate: gender, default: FEMALE }')
+    party = Row(row_id=1, party_key="P1", full_name="Asha", nickname=None, gender="MALE")
+    codes = {"gender": {"MALE": "2", "FEMALE": "1"}}
+    assert render(layout(text), party=party, translations=codes)[1].startswith("PNN01" + "0104Asha" + "02012")
+    party.gender = None                                                    # default is canonical too
+    assert render(layout(text), party=party, translations=codes)[1].startswith("PNN01" + "0104Asha" + "02011")
+    party.gender = "TRANSGENDER"                                           # no active code: field left out
+    assert render(layout(text), party=party, translations=codes)[1].startswith("PNN01" + "0104Asha" + "TL")
 
 
 def test_repeating_segments_order_max_required_and_drops():
@@ -133,6 +145,8 @@ def test_split_words_reports_overflow():
      "unknown source"),
     ({"segments": [{"tag": "PN", "seq": "N01", "from": "party", "fields": [{"tag": "01", "source": "x",
                                                                           "format": "lookup"}]}]}, "args.map"),
+    ({"segments": [{"tag": "PN", "seq": "N01", "from": "party", "fields": [{"tag": "01", "source": "x",
+                                                                          "translate": "sex"}]}]}, "code list"),
 ])
 def test_layout_mistakes_fail_at_load(change, message):
     with pytest.raises(LayoutError, match=message):

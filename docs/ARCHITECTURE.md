@@ -94,6 +94,8 @@
 | `submissions/dispatch.py` | Starting workers via S3 job objects (no dispatch locally) |
 | `submissions/requests/`, `tenants/`, `bureaus/`, `adjustments/`, `users.py` | Platform repositories |
 | `submissions/canonical/`, `adapters/`, `snapshot/`, `validation/`, `formats/`, `pipeline/` | Data pipeline ([PIPELINE.md](PIPELINE.md)) |
+| `submissions/types/<type>/` | One folder per submission type: codes, requirements, rules, layout, pipeline |
+| `submissions/reference.py` | Reference data seed (insert-missing) and the translations files use |
 | `submissions/worker/` | Runs one request (Lambda) or polls for PENDING rows (local development) |
 | `submissions/ops/` | Audit, recovery, retention, scheduled runs |
 | `submissions/onboarding/` | `new_tenant`, `introspect`, `dry_run` ([ONBOARDING.md](../ONBOARDING.md)) |
@@ -104,7 +106,7 @@
 
 ## 4. Platform data model
 
-**`tenant`:** `tenant_id` (e.g. `nbfc_017`), `display_name`, `source_schema`, `mapping_path`, `extract_strategy` (insert_select / stream), `is_active`.
+**`tenant`:** `tenant_id` (e.g. `nbfc_017`), `display_name`, `source_schema`, `mapping_path` (client folder, `clients/nbfc_017`, holding one `<type>.yaml` per submission type; an older value naming `…/mapping.yaml` is read as its folder), `extract_strategy` (insert_select / stream), `is_active`.
 
 **`submission_request`:** one row = one unit of work.
 
@@ -134,6 +136,17 @@ Rows per click: one per type for a validation, one per type × bureau for file g
 | `v_snapshot_adjustment` (view) | Each frozen adjustment with `loans_affected` (0 = not found → WARN `UCRF.ADJ.NOT_FOUND`) |
 
 In the extract (`submissions/adjustments/sql.py`), the adjustments are frozen, resolved against the NBFC's own SELECTs, and joined into each entity's SELECT. The `c_*` tables hold the final data, so validation and the formatter need no changes.
+
+**Reference data (master: the database).** Data lives in tables, logic in the repo:
+
+| Table | Holds | Initial rows from |
+|---|---|---|
+| `ref_code` | Canonical code lists (`gender: FEMALE, MALE, …`) | `canonical/model.yaml` |
+| `ref_state_pin` | PIN prefix range per canonical state | `canonical/model.yaml` |
+| `ref_code_translation` | Per submission type: canonical value → file code, `is_active` (no active row = not reportable in that file) | `types/<type>/codes.yaml` |
+| `ref_code_group` | Per submission type: named sets of canonical values used by rules (e.g. `card_account_type`) | `types/<type>/codes.yaml` |
+
+`submissions.reference` runs after the migrations (jobs Lambda `migrate`, `python -m submissions.migrate`) and only inserts missing rows, so changes made in the tables survive deploys. Planned (ROADMAP / plan 1c): an admin page with checks and audit, a frozen copy of the translations per snapshot, YAML export.
 
 Pipeline tables (`extract_snapshot`, `c_*`, `validation_*`, `record_outcome`) are in [PIPELINE.md](PIPELINE.md). Operations: `audit_event`; `worker_heartbeat` exists but is no longer written.
 

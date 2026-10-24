@@ -14,7 +14,7 @@ from submissions.onboarding.new_tenant import register_tenant
 from submissions.tenants import InvalidTenantError, Tenant
 
 ROOT = Path(__file__).resolve().parent.parent
-BASE = load_mapping(ROOT / "clients" / "_base" / "mapping.yaml")
+BASE = load_mapping(ROOT / "clients" / "_base" / "consumer.yaml")
 AS_OF = date(2026, 9, 30)
 
 
@@ -42,7 +42,7 @@ def test_introspect_finds_differences_and_needed_overrides(lms_engine):
 
 
 def test_introspect_clean_with_the_tenant_mapping(lms_engine):
-    tenant_mapping = load_mapping(ROOT / "clients" / "nbfc_002" / "mapping.yaml")
+    tenant_mapping = load_mapping(ROOT / "clients" / "nbfc_002" / "consumer.yaml")
     report = introspect(lms_engine, "nbfc_002", "nbfc_001", tenant_mapping)
     assert report.unresolved == [] and not report.needs_overrides
     assert "resolves fully" in format_report(report)
@@ -63,17 +63,19 @@ def base_dir(tmp_path):
 
 
 def test_register_tenant_creates_mapping_from_template(engine, tenant_repo, base_dir):
-    tenant, path, created = register_tenant(engine, base_dir, "nbfc_017", "Acme Finance", "acme_lms",
-                                            placeholder_bureaus=True)
+    tenant, folder, created = register_tenant(engine, base_dir, "nbfc_017", "Acme Finance", "acme_lms",
+                                              placeholder_bureaus=True)
+    path = folder / "consumer.yaml"
     assert created and path.is_file() and "nbfc_017" in path.read_text(encoding="utf-8")
     stored = tenant_repo.get("nbfc_017")
-    assert (stored.source_schema, stored.mapping_path) == ("acme_lms", "clients/nbfc_017/mapping.yaml")
+    assert (stored.source_schema, stored.mapping_path) == ("acme_lms", "clients/nbfc_017")
     assert set(load_mapping(path).entities) >= {"party", "account", "account_holder"}   # template is a valid mapping
     assert len(BureauRepository(engine).list("nbfc_017")) == 4
 
 
 def test_register_tenant_never_overwrites_an_edited_mapping(engine, base_dir):
-    _, path, _ = register_tenant(engine, base_dir, "nbfc_017", "Acme", "acme_lms")
+    _, folder, _ = register_tenant(engine, base_dir, "nbfc_017", "Acme", "acme_lms")
+    path = folder / "consumer.yaml"
     path.write_text(path.read_text(encoding="utf-8") + "\n# edited\n", encoding="utf-8")
     _, _, created = register_tenant(engine, base_dir, "nbfc_017", "Acme Finance Ltd", "acme_lms")
     assert not created and path.read_text(encoding="utf-8").endswith("# edited\n")
@@ -109,12 +111,12 @@ def test_dry_run_keep_leaves_snapshot(engine, lms_engine):
 
 
 def test_dry_run_lists_untranslated_codes(engine, lms_engine, tenant_repo, tmp_path):
-    mapping = tmp_path / "mapping.yaml"
-    mapping.write_text(f'canonical_version: "1.0"\nextends: {(ROOT / "clients" / "nbfc_002" / "mapping.yaml").as_posix()}\n'
-                       "lookups: {gender: {MALE: null}, account_type: {PERSONAL: null}}\n", encoding="utf-8")
-    tenant_repo.upsert(Tenant("nbfc_002", "Demo NBFC Two", "nbfc_002", str(mapping)))
+    mapping = tmp_path / "consumer.yaml"
+    mapping.write_text(f'submission_type: CONSUMER\ncanonical_version: "1.0"\nextends: {(ROOT / "clients" / "nbfc_002" / "consumer.yaml").as_posix()}\n'
+                       "lookups: {account_type: {PERSONAL: null, OVERDRAFT: null}}\n", encoding="utf-8")
+    tenant_repo.upsert(Tenant("nbfc_002", "Demo NBFC Two", "nbfc_002", str(tmp_path)))
     report = dry_run(app_engine=engine, source_engine=lms_engine, tenant_id="nbfc_002", as_of_date=AS_OF,
                      base_dir=ROOT)
-    assert report.unmapped_codes["party.gender"] == ["MALE"]
-    assert report.unmapped_codes["account.account_type"] == ["PERSONAL"]
+    # OVERDRAFT is also a canonical value: a client code equal to one passes through as valid without a lookup
+    assert report.unmapped_codes == {"account.account_type": ["PERSONAL"]}
     assert "add them to the mapping lookups" in format_dry_run(report)

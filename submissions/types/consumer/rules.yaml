@@ -12,13 +12,39 @@
 # submissions/validation/results.py CATEGORIES to override it. `expected: true` marks the spec's normal handling
 # (e.g. a field the spec says to drop): shown as "Spec rule (no action)" and never counted as a gap. Output unchanged.
 #
-# Card account types (10, 16, 31, 35) come from ref_code list card_account_type.
+# Rules check canonical values (model.yaml code lists), never file codes. Card account types are the consumer
+# group card_account_type (types/consumer/codes.yaml -> ref_code_group).
 
 pack: UCRF-3.74
 submission_type: CONSUMER
+rule_prefix: UCRF.                     # built-in rule IDs: UCRF.<segment>.<NAME>; custom rules may not use it
 
 segments: {party: PN, party_identifier: ID, party_phone: PT, party_email: EC, party_address: PA,
            account: TL, account_holder: TL, account_history: TH}
+
+# Findings report (request and Findings pages): business categories in display order. A rule's category comes from
+# the segment in its ID (UCRF.<segment>.…), generated rules from their entity's segment, or `category:` on the rule.
+categories:
+  - {key: MINIMUM,  label: Minimum reporting requirements, segments: [REC]}
+  - {key: PERSONAL, label: Name & personal details,        segments: [PN]}
+  - {key: IDENTITY, label: Identity documents,             segments: [ID]}
+  - {key: CONTACT,  label: Contact details,                segments: [PT, EC]}
+  - {key: ADDRESS,  label: Address,                        segments: [PA]}
+  - {key: LOAN,     label: Loan details,                   segments: [TL, TH, ADJ]}
+custom_category: {key: CUSTOM, label: NBFC-specific checks}
+default_category: LOAN                 # rules whose segment is in no category (e.g. extension_attribute)
+
+# Record decision after all rules ran (validation/cascades.py): one record = one account x holder.
+cascade:
+  name: account_holder_minimums
+  settings:
+    no_valid_address_rule: UCRF.REC.NO_VALID_ADDRESS
+    no_phone_or_id_rule: UCRF.REC.NO_PHONE_OR_ID
+    phone_or_id_from_parameter: phone_or_id_required_from
+    qualifying_id_types: [PAN, PASSPORT, VOTER_ID, DRIVING_LICENCE, RATION_CARD, AADHAAR, CKYC, G_RAM_G]
+    single_word_name_rule: UCRF.REC.SINGLE_WORD_NAME
+    single_word_name_finding: UCRF.PN.SINGLE_WORD_NAME
+    mobile_phone_type: MOBILE
 
 generated:
   required_outcome:
@@ -284,7 +310,7 @@ rules:
       JOIN c_account_holder h ON h.snapshot_id = x.snapshot_id AND h.party_key = x.party_key
       JOIN c_account a ON a.snapshot_id = h.snapshot_id AND a.account_key = h.account_key
       WHERE x.snapshot_id = :snapshot_id AND (x.pin_code IS NULL OR TRIM(x.pin_code) = '')
-        AND COALESCE(x.state_code, '') <> '77' AND a.date_opened >= :state_pin_required_from
+        AND COALESCE(x.state_code, '') <> 'FOREIGN' AND a.date_opened >= :state_pin_required_from
   - id: UCRF.PA.PIN_FORMAT
     entity: party_address
     field: pin_code
@@ -307,7 +333,7 @@ rules:
       FROM c_party_address x
       JOIN c_account_holder h ON h.snapshot_id = x.snapshot_id AND h.party_key = x.party_key
       JOIN c_account a ON a.snapshot_id = h.snapshot_id AND a.account_key = h.account_key
-      WHERE x.snapshot_id = :snapshot_id AND x.state_code = '77' AND a.account_type NOT IN ('10', '37', '08', '02')
+      WHERE x.snapshot_id = :snapshot_id AND x.state_code = 'FOREIGN' AND a.account_type NOT IN ('CREDIT_CARD', 'LOAN_ON_CREDIT_CARD', 'EDUCATION_LOAN', 'HOUSING_LOAN')
 
   # ------------------------------------------------------------------ TL account segment
   - id: UCRF.TL.DATE_OPENED_INVALID
@@ -384,7 +410,7 @@ rules:
       SELECT a.row_id, a.account_key, NULL AS party_key, a.days_past_due AS value
       FROM c_account a
       WHERE a.snapshot_id = :snapshot_id AND a.days_past_due > 0 AND COALESCE(a.amount_overdue, 0) <= 0
-        AND a.account_type NOT IN (SELECT code FROM ref_code WHERE code_list = 'card_account_type')
+        AND a.account_type NOT IN (SELECT g.code FROM ref_code_group g WHERE g.submission_type = :submission_type AND g.group_name = 'card_account_type')
   - id: UCRF.TL.OVERDUE_WITHOUT_DPD
     entity: account
     field: days_past_due
@@ -394,7 +420,7 @@ rules:
       SELECT a.row_id, a.account_key, NULL AS party_key, a.amount_overdue AS value
       FROM c_account a
       WHERE a.snapshot_id = :snapshot_id AND a.amount_overdue > 0 AND a.days_past_due = 0
-        AND a.account_type NOT IN (SELECT code FROM ref_code WHERE code_list = 'card_account_type')
+        AND a.account_type NOT IN (SELECT g.code FROM ref_code_group g WHERE g.submission_type = :submission_type AND g.group_name = 'card_account_type')
   - id: UCRF.TL.DPD_ABOVE_900
     entity: account
     field: days_past_due
@@ -422,7 +448,7 @@ rules:
       SELECT a.row_id, a.account_key, NULL AS party_key, a.credit_limit AS value
       FROM c_account a
       WHERE a.snapshot_id = :snapshot_id AND a.credit_limit IS NOT NULL
-        AND a.account_type NOT IN (SELECT code FROM ref_code WHERE code_list = 'card_account_type')
+        AND a.account_type NOT IN (SELECT g.code FROM ref_code_group g WHERE g.submission_type = :submission_type AND g.group_name = 'card_account_type')
   - id: UCRF.TL.CASH_LIMIT_NOT_CARD
     entity: account
     field: cash_limit
@@ -432,7 +458,7 @@ rules:
       SELECT a.row_id, a.account_key, NULL AS party_key, a.cash_limit AS value
       FROM c_account a
       WHERE a.snapshot_id = :snapshot_id AND a.cash_limit IS NOT NULL
-        AND a.account_type NOT IN (SELECT code FROM ref_code WHERE code_list = 'card_account_type')
+        AND a.account_type NOT IN (SELECT g.code FROM ref_code_group g WHERE g.submission_type = :submission_type AND g.group_name = 'card_account_type')
   - id: UCRF.TL.EMI_NOT_ALLOWED
     entity: account
     field: emi_amount
@@ -442,7 +468,7 @@ rules:
       SELECT a.row_id, a.account_key, NULL AS party_key, a.emi_amount AS value
       FROM c_account a
       WHERE a.snapshot_id = :snapshot_id AND a.emi_amount IS NOT NULL
-        AND (a.account_type = '12' OR a.account_type IN (SELECT code FROM ref_code WHERE code_list = 'card_account_type'))
+        AND (a.account_type = 'OVERDRAFT' OR a.account_type IN (SELECT g.code FROM ref_code_group g WHERE g.submission_type = :submission_type AND g.group_name = 'card_account_type'))
   - id: UCRF.TL.EMI_ZERO
     entity: account
     field: emi_amount
@@ -460,7 +486,7 @@ rules:
       SELECT a.row_id, a.account_key, NULL AS party_key, a.credit_facility_status AS value
       FROM c_account a
       WHERE a.snapshot_id = :snapshot_id AND (a.written_off_total IS NOT NULL OR a.written_off_principal IS NOT NULL)
-        AND COALESCE(a.credit_facility_status, '') NOT IN ('02', '03', '04')
+        AND COALESCE(a.credit_facility_status, '') NOT IN ('WRITTEN_OFF', 'SETTLED', 'POST_WO_SETTLED')
   - id: UCRF.TL.WRITTEN_OFF_AMOUNTS_MISSING
     entity: account
     field: written_off_total
@@ -469,7 +495,7 @@ rules:
     sql: |
       SELECT a.row_id, a.account_key, NULL AS party_key, a.credit_facility_status AS value
       FROM c_account a
-      WHERE a.snapshot_id = :snapshot_id AND a.credit_facility_status IN ('02', '03', '04')
+      WHERE a.snapshot_id = :snapshot_id AND a.credit_facility_status IN ('WRITTEN_OFF', 'SETTLED', 'POST_WO_SETTLED')
         AND a.written_off_total IS NULL AND a.written_off_principal IS NULL
   - id: UCRF.TL.WRITTEN_OFF_PRINCIPAL_ABOVE_TOTAL
     entity: account
@@ -498,7 +524,7 @@ rules:
       SELECT a.row_id, a.account_key, NULL AS party_key, a.credit_facility_status AS value
       FROM c_account a
       WHERE a.snapshot_id = :snapshot_id AND a.settlement_amount IS NOT NULL
-        AND COALESCE(a.credit_facility_status, '') NOT IN ('03', '04', '15', '16')
+        AND COALESCE(a.credit_facility_status, '') NOT IN ('SETTLED', 'POST_WO_SETTLED', 'AUCTIONED_SETTLED', 'REPOSSESSED_SETTLED')
   - id: UCRF.TL.SETTLEMENT_ZERO
     entity: account
     field: settlement_amount
@@ -516,7 +542,7 @@ rules:
       SELECT a.row_id, a.account_key, NULL AS party_key, a.collateral_value AS value
       FROM c_account a
       WHERE a.snapshot_id = :snapshot_id AND a.collateral_value IS NOT NULL
-        AND COALESCE(a.collateral_type, '00') = '00'
+        AND COALESCE(a.collateral_type, 'NONE') = 'NONE'
   - id: UCRF.TL.COLLATERAL_VALUE_NOT_POSITIVE
     entity: account
     field: collateral_value
@@ -577,7 +603,7 @@ rules:
       SELECT h.row_id, h.account_key, h.party_key, a.account_type AS value
       FROM c_account_holder h
       JOIN c_account a ON a.snapshot_id = h.snapshot_id AND a.account_key = h.account_key
-      WHERE h.snapshot_id = :snapshot_id AND h.ownership_indicator = '2' AND a.account_type <> '10'
+      WHERE h.snapshot_id = :snapshot_id AND h.ownership_indicator = 'AUTHORISED_USER' AND a.account_type <> 'CREDIT_CARD'
   - id: UCRF.TL.GUARANTEE_INVOKED_NOT_GUARANTOR
     entity: account_holder
     field: ownership_indicator
@@ -587,7 +613,7 @@ rules:
       SELECT h.row_id, h.account_key, h.party_key, h.ownership_indicator AS value
       FROM c_account_holder h
       JOIN c_account a ON a.snapshot_id = h.snapshot_id AND a.account_key = h.account_key
-      WHERE h.snapshot_id = :snapshot_id AND a.credit_facility_status = '17' AND h.ownership_indicator <> '3'
+      WHERE h.snapshot_id = :snapshot_id AND a.credit_facility_status = 'GUARANTEE_INVOKED' AND h.ownership_indicator <> 'GUARANTOR'
 
   # ------------------------------------------------------------------ record integrity
   - id: UCRF.REC.ACCOUNT_MISSING

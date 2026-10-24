@@ -10,7 +10,7 @@ from submissions.bureaus.seed import seed as seed_bureaus
 from submissions.formats.tudf.encoding import (
     EncodingError, amount, fit_words, fixed, printable, rate, signed_amount, tlv,
 )
-from submissions.formats.ucrf_consumer import FormatOptions, build_file, header, header_length, parse_records
+from submissions.types.consumer.file import FormatOptions, build_file, header, header_length, parse_records
 
 HEADER_LENGTH = header_length()
 from submissions.snapshot import SnapshotRepository
@@ -70,7 +70,7 @@ def validated(engine, lms_engine, tenant_repo, bureau_repo):
 
     def make(tenant_id):
         snapshots = SnapshotRepository(engine)
-        sid = run_extract(tenant=tenant_repo.get(tenant_id), mapping=load_mapping(CLIENTS / tenant_id / "mapping.yaml"),
+        sid = run_extract(tenant=tenant_repo.get(tenant_id), mapping=load_mapping(CLIENTS / tenant_id / "consumer.yaml"),
                           submission_type="CONSUMER", as_of_date=AS_OF, app_engine=engine, source_engine=lms_engine,
                           snapshots=snapshots, owner="t").snapshot_id
         validate_snapshot(engine, snapshots, sid, load_rule_set(engine, tenant_id, "CONSUMER"))

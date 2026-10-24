@@ -1,4 +1,4 @@
-"""UCRF consumer file: the layout ucrf_consumer_3_74.yaml rendered by the generic TUDF engine (submissions/formats/tudf)."""
+"""UCRF consumer file: the layout types/consumer/layout.yaml rendered by the generic TUDF engine (submissions/formats/tudf)."""
 
 from __future__ import annotations
 
@@ -10,15 +10,17 @@ from types import SimpleNamespace
 from sqlalchemy import Engine
 
 from submissions.bureaus import BureauProfile
-from submissions.enums import ReportingCycle
+from submissions.enums import ReportingCycle, SubmissionType
 from submissions.formats.tudf import engine as tudf
 from submissions.formats.tudf.engine import FileStats
 from submissions.formats.tudf.layout import Layout, load_layout
 from submissions.formats.tudf.parser import ParsedSegment
 from submissions.formats.tudf.parser import parse_records as _parse_records
 from submissions.formats.tudf.snapshot import Drops, SnapshotData
+from submissions.reference import active_translations
+from submissions.types import type_definition
 
-LAYOUT_FILE = Path(__file__).with_name("ucrf_consumer_3_74.yaml")
+LAYOUT_FILE = type_definition(SubmissionType.CONSUMER).path("layout.yaml")
 
 
 def layout() -> Layout:
@@ -48,7 +50,9 @@ def header(bureau: BureauProfile, as_of_date: date, cycle: ReportingCycle | None
 
 def build_file(engine: Engine, snapshot_id: int, as_of_date: date, bureau: BureauProfile,
                cycle: ReportingCycle | None = None, options: FormatOptions = FormatOptions()) -> tuple[bytes, FileStats]:
-    return tudf.build_file(engine, snapshot_id, as_of_date, bureau, cycle, options.apply(layout()))
+    with engine.connect() as conn:
+        translations = active_translations(conn, SubmissionType.CONSUMER)
+    return tudf.build_file(engine, snapshot_id, as_of_date, bureau, cycle, options.apply(layout()), translations)
 
 
 def parse_records(body: str, options: FormatOptions = FormatOptions()) -> list[list[ParsedSegment]]:

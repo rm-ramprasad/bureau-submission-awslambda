@@ -1,3 +1,4 @@
 # nbfc_001: standard LMS layout, nothing to override.
+submission_type: CONSUMER
 canonical_version: "1.0"
-extends: ../_base/mapping.yaml
+extends: ../_base/consumer.yaml

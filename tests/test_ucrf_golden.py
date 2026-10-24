@@ -14,7 +14,7 @@ from submissions.adapters.extract import run_extract
 from submissions.adapters.mapping import load_mapping
 from submissions.bureaus.seed import seed as seed_bureaus
 from submissions.enums import BureauCode, ReportingCycle
-from submissions.formats.ucrf_consumer import FormatOptions, build_file
+from submissions.types.consumer.file import FormatOptions, build_file
 from submissions.snapshot import SnapshotRepository
 from submissions.validation.engine import validate_snapshot
 from submissions.validation.rules import load_rule_set
@@ -31,7 +31,7 @@ def snapshot(engine, lms_engine, tenant_repo, bureau_repo):
 
     def make(tenant_id):
         snapshots = SnapshotRepository(engine)
-        sid = run_extract(tenant=tenant_repo.get(tenant_id), mapping=load_mapping(ROOT / "clients" / tenant_id / "mapping.yaml"),
+        sid = run_extract(tenant=tenant_repo.get(tenant_id), mapping=load_mapping(ROOT / "clients" / tenant_id / "consumer.yaml"),
                           submission_type="CONSUMER", as_of_date=AS_OF, app_engine=engine, source_engine=lms_engine,
                           snapshots=snapshots, owner="golden").snapshot_id
         validate_snapshot(engine, snapshots, sid, load_rule_set(engine, tenant_id, "CONSUMER"))
@@ -51,15 +51,15 @@ def add_history(engine, snapshot_id: int) -> None:
     with engine.begin() as conn:
         rows = conn.execute(select(account.c.account_key, account.c.account_type)
                             .where(account.c.snapshot_id == snapshot_id).order_by(account.c.account_key)).all()
-        card = next(r.account_key for r in rows if r.account_type == "10")
-        loan = next(r.account_key for r in rows if r.account_type != "10")
+        card = next(r.account_key for r in rows if r.account_type == "CREDIT_CARD")
+        loan = next(r.account_key for r in rows if r.account_type != "CREDIT_CARD")
         values = []
         for i in range(50):                                          # loan: 50 months back from September 2026
             year, mon = divmod(8 - i, 12)
             month = date(2026 + year, mon + 1, 15)
             values.append(dict(snapshot_id=snapshot_id, account_key=loan, history_month=month,
                                days_past_due=[None, 1200, 30, None][i % 4],       # none / above the cap / normal
-                               asset_classification=["99", None, None, "02"][i % 4],   # unknown / - / - / SUB
+                               asset_classification=["UNKNOWN", None, None, "SUBSTANDARD"][i % 4],   # unknown / - / - / SUB
 
                                amount_overdue=Decimal("1500.50") if i % 2 else None,
                                high_credit_amount=Decimal("500000"), current_balance=Decimal(400000 - i * 1000),

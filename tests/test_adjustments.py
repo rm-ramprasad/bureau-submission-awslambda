@@ -268,14 +268,14 @@ def test_adjustments_need_the_lms_on_the_app_server(engine, lms_engine, tenant_r
     adjustments.add_exclusions(scope, K.EXCLUDE_ACCOUNT, [JOINT_LOAN], None, "u")
     tenant = tenant_repo.get("nbfc_001")                                 # stream from a separate server
     with pytest.raises(ExtractError, match="must be on the app's MySQL server"):
-        run_extract(tenant=tenant, mapping=load_mapping(ROOT / tenant.mapping_path), submission_type="CONSUMER",
+        run_extract(tenant=tenant, mapping=load_mapping(ROOT / tenant.mapping_path / "consumer.yaml"), submission_type="CONSUMER",
                     as_of_date=AS_OF, app_engine=engine, source_engine=lms_engine,
                     snapshots=SnapshotRepository(engine), owner="t", batch_id=scope.batch_id)
 
 
 def test_without_adjustments_a_separate_lms_server_still_works(engine, lms_engine, tenant_repo):
     tenant = tenant_repo.get("nbfc_001")
-    result = run_extract(tenant=tenant, mapping=load_mapping(ROOT / tenant.mapping_path), submission_type="CONSUMER",
+    result = run_extract(tenant=tenant, mapping=load_mapping(ROOT / tenant.mapping_path / "consumer.yaml"), submission_type="CONSUMER",
                          as_of_date=AS_OF, app_engine=engine, source_engine=lms_engine,
                          snapshots=SnapshotRepository(engine), owner="t")
     assert result.row_counts["account_holder"] == 56

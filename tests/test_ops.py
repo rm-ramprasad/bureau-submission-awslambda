@@ -85,10 +85,10 @@ def test_abandoned_snapshot_build_is_failed_and_cleaned(engine, clock, requests_
 
 def test_retry_rebuilds_a_failed_batch_snapshot(worker, requests_repo, tenant_repo, tmp_path):
     good = tenant_repo.get("nbfc_001")
-    bad = tmp_path / "bad.yaml"
-    bad.write_text(f'canonical_version: "1.0"\nextends: {(ROOT / "clients" / "_base" / "mapping.yaml").as_posix()}\n'
+    bad = tmp_path / "consumer.yaml"
+    bad.write_text(f'submission_type: CONSUMER\ncanonical_version: "1.0"\nextends: {(ROOT / "clients" / "_base" / "consumer.yaml").as_posix()}\n'
                    "entities: {account: {columns: {days_past_due: a.no_such_column}}}\n", encoding="utf-8")
-    tenant_repo.upsert(Tenant("nbfc_001", good.display_name, "nbfc_001", str(bad)))
+    tenant_repo.upsert(Tenant("nbfc_001", good.display_name, "nbfc_001", str(tmp_path)))
     batch = requests_repo.create_batch("nbfc_001", AS_OF, M.VALIDATE, ["CONSUMER"])
     worker.run_once()
     (row,) = requests_repo.list_batch(batch)

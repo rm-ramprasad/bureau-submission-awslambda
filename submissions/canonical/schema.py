@@ -45,21 +45,42 @@ extract_snapshot = Table(
 )
 
 # ---------------------------------------------------------------- reference data
+# Canonical values (ref_code, ref_state_pin) come from model.yaml; what each submission type writes for them
+# (ref_code_translation, ref_code_group) from submissions/types/<type>/codes.yaml. All four are seeded on deploy
+# by submissions.reference (rows added directly in the tables are kept), so a new file type is new rows.
 ref_code = Table(
     "ref_code", metadata,
     Column("code_list", String(40), primary_key=True),
-    Column("code", String(10), primary_key=True),
+    Column("code", String(40), primary_key=True),
     Column("description", String(200), nullable=False),
     Column("is_active", Boolean, nullable=False),
-    comment="UCRF code lists from the canonical model (generated)",
+    comment="Canonical code lists: the standard values the c_* tables hold (model.yaml)",
 )
 
 ref_state_pin = Table(
     "ref_state_pin", metadata,
-    Column("state_code", String(10), primary_key=True),
+    Column("state_code", String(40), primary_key=True),
     Column("pin_prefix_min", Integer, nullable=False),
     Column("pin_prefix_max", Integer, nullable=False),
-    comment="Valid first two PIN digits per state code, spec Appendix C (generated)",
+    comment="Valid first two PIN digits per canonical state (model.yaml)",
+)
+
+ref_code_translation = Table(
+    "ref_code_translation", metadata,
+    Column("submission_type", String(20), primary_key=True),
+    Column("code_list", String(40), primary_key=True),
+    Column("code", String(40), primary_key=True, comment="Canonical value (ref_code)"),
+    Column("output_code", String(20), nullable=False, comment="What this submission type's file holds"),
+    Column("is_active", Boolean, nullable=False, comment="0 = reserved by the spec: not reportable"),
+    comment="Canonical value -> file code per submission type (types/<type>/codes.yaml). No row = not reportable",
+)
+
+ref_code_group = Table(
+    "ref_code_group", metadata,
+    Column("submission_type", String(20), primary_key=True),
+    Column("group_name", String(40), primary_key=True),
+    Column("code", String(40), primary_key=True, comment="Canonical value"),
+    comment="Named sets of canonical values a submission type's rules use (types/<type>/codes.yaml)",
 )
 
 
@@ -81,11 +102,7 @@ def _sa_type(col: ColumnDef):
 
 
 def _comment(col: ColumnDef) -> str | None:
-    parts = [p for p in (
-        f"[{col.ucrf}]" if col.ucrf else None,
-        "required" if col.required else None,
-        f"codes: {col.code_list}" if col.code_list else None,
-        col.description) if p]
+    parts = [p for p in (f"codes: {col.code_list}" if col.code_list else None, col.description) if p]
     return " ".join(parts) or None
 
 

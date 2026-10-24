@@ -4,7 +4,9 @@ A layout declares the encoding (segment tag style, record separator, record end,
 and the segments of a record in order. Each segment says which rows it is written from (`from`, plus `rows` for
 repeating segments), its sequence label, how many it may repeat, and its fields. Each field says its tag, where
 its value comes from (`source`), whether it must be present (`check`), when it applies (`when`), limits (`cap`,
-`max_len`), a `default`, and the named `format` that turns the value into text (formatters.py).
+`max_len`), a `default`, the canonical code list whose file code is written (`translate`), and the named `format`
+that turns the value into text (formatters.py). Snapshot values are canonical (`FEMALE`), so `when`, `default` and
+formatter args use canonical values; `translate` turns them into the file's code (`1`) just before formatting.
 
 Source paths: `column` (the segment's own row), `party.<col>`, `account.<col>`, `holder.<col>`,
 `bureau.<attribute>`, `run.as_of_date` / `run.cycle`.
@@ -19,6 +21,7 @@ from pathlib import Path
 
 import yaml
 
+from submissions.canonical.definition import canonical_model
 from submissions.formats.tudf.formatters import MULTI_FORMATTERS, VALUE_FORMATTERS
 
 RECORD_SOURCES = {"party": "party", "account": "account", "holder": "account_holder"}   # path prefix -> entity
@@ -67,6 +70,7 @@ class FieldSpec:
     cap: int | None = None                # numbers above it are written as the cap
     max_len: int | None = None            # text cut to this length after formatting
     default: object = None                # value (or source path "run.as_of_date" ...) used when missing
+    translate: str | None = None          # canonical code list: write this type's file code for the value
     required: bool = False                # no value -> the whole segment instance is left out
     alternatives: tuple["FieldSpec", ...] = ()        # first one that gives a value
     warn: str | None = None               # message when a multi formatter had to cut text
@@ -116,15 +120,15 @@ def _check_path(where: str, path: str) -> None:
 
 def _field(where: str, spec: dict) -> FieldSpec:
     _known(where, spec, {"tag", "tags", "source", "sources", "format", "args", "check", "when", "only_positive", "cap",
-                         "max_len", "default", "required", "alternatives", "warn"})
+                         "max_len", "default", "translate", "required", "alternatives", "warn"})
     alternatives = tuple(_field(f"{where} alternative {i}", {"tag": spec.get("tag"), **alt})
                          for i, alt in enumerate(spec.get("alternatives", []), 1))
     f = FieldSpec(tag=str(spec["tag"]) if "tag" in spec else None, tags=tuple(str(t) for t in spec.get("tags", [])),
                   source=spec.get("source"), sources=tuple(spec.get("sources", [])), format=spec.get("format", "raw"),
                   args=spec.get("args", {}), check=spec.get("check", "present"), when=spec.get("when", {}),
                   only_positive=bool(spec.get("only_positive", False)), cap=spec.get("cap"),
-                  max_len=spec.get("max_len"), default=spec.get("default"), required=bool(spec.get("required", False)),
-                  alternatives=alternatives, warn=spec.get("warn"))
+                  max_len=spec.get("max_len"), default=spec.get("default"), translate=spec.get("translate"),
+                  required=bool(spec.get("required", False)), alternatives=alternatives, warn=spec.get("warn"))
     if bool(f.tag) == bool(f.tags):
         raise LayoutError(f"{where}: give either tag or tags")
     for t in ((f.tag,) if f.tag else f.tags):
@@ -150,6 +154,11 @@ def _field(where: str, spec: dict) -> FieldSpec:
             _check_path(where, path)
     if f.format == "lookup" and not isinstance(f.args.get("map"), dict):
         raise LayoutError(f"{where}: format lookup needs args.map")
+    if f.translate is not None:
+        if f.tags:
+            raise LayoutError(f"{where}: translate works on one value, not tags")
+        if f.translate not in canonical_model().code_lists:
+            raise LayoutError(f"{where}: translate: unknown canonical code list {f.translate!r}")
     return f
 
 

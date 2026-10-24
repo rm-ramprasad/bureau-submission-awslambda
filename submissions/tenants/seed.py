@@ -19,8 +19,8 @@ from submissions.tenants.repository import TenantRepository
 log = logging.getLogger(__name__)
 
 MOCK_TENANTS = [
-    Tenant("nbfc_001", "Demo NBFC One (base schema)", "nbfc_001", "clients/nbfc_001/mapping.yaml"),
-    Tenant("nbfc_002", "Demo NBFC Two (custom schema)", "nbfc_002", "clients/nbfc_002/mapping.yaml"),
+    Tenant("nbfc_001", "Demo NBFC One (base schema)", "nbfc_001", "clients/nbfc_001"),
+    Tenant("nbfc_002", "Demo NBFC Two (custom schema)", "nbfc_002", "clients/nbfc_002"),
 ]
 
 

@@ -12,9 +12,8 @@ from submissions.canonical.schema import (
     ENTITY_TABLES, RECORD_TYPES, extract_snapshot, record_from_row, ref_code, ref_code_rows, ref_state_pin,
     ref_state_pin_rows,
 )
-from submissions.migrate import MIGRATIONS_DIR
+from submissions.types import type_definition
 
-MIGRATION_003 = MIGRATIONS_DIR / "003_canonical_model.sql"
 EXPECTED_ENTITIES = {"party", "party_identifier", "party_phone", "party_email", "party_address", "account",
                      "account_holder", "account_history", "extension_attribute"}
 
@@ -30,11 +29,17 @@ def test_packaged_model_loads():
 def test_code_lists_match_spec_appendices():
     lists = canonical_model().code_lists
     assert len(lists["account_type"].values(active_only=False)) == 61   # 00-21, 23-47, 50-59, 61, 69-71
-    assert {"18", "19", "20"}.isdisjoint(lists["account_type"].values())          # future use = inactive
-    assert lists["id_type"].values() == {"01", "02", "03", "04", "05", "06", "09", "10"}
-    assert lists["card_account_type"].values() == {"10", "16", "31", "35"}
+    assert lists["id_type"].values() == {"PAN", "PASSPORT", "VOTER_ID", "DRIVING_LICENCE", "RATION_CARD", "AADHAAR",
+                                         "CKYC", "G_RAM_G", "ADDITIONAL_ID_1", "ADDITIONAL_ID_2"}
     assert len(lists["credit_facility_status"].values()) == 19
-    assert "26" not in lists["state_code"].values()
+    consumer = type_definition("CONSUMER")
+    assert consumer.groups["card_account_type"] == ("CREDIT_CARD", "FLEET_CARD", "SECURED_CREDIT_CARD",
+                                                    "CORPORATE_CREDIT_CARD")
+    future = {v for v, t in consumer.translations["account_type"].items() if not t.active}   # "future use" in the spec
+    assert future == {"TELCO_WIRELESS", "TELCO_BROADBAND", "TELCO_LANDLINE"}
+    assert "26" not in {t.output_code for t in consumer.translations["state_code"].values()}
+    for list_name, values in consumer.translations.items():         # every canonical value has a consumer code
+        assert set(values) == lists[list_name].values(active_only=False), list_name
 
 
 def test_every_code_column_references_a_code_list():
@@ -67,25 +72,20 @@ def test_invalid_definitions_rejected(mutate, message):
         parse_model(raw)
 
 
-# ---------------------------------------------------------------- generated migration
-def test_committed_migration_matches_model():
-    assert MIGRATION_003.read_text(encoding="utf-8") == generate_sql(), \
-        "migrations/003_canonical_model.sql is stale: python -m submissions.canonical.generate --out ..."
-
-
-def test_generator_check_mode(tmp_path, capsys):
-    stale = tmp_path / "003.sql"
-    stale.write_text("-- old", encoding="utf-8")
-    assert generate_main(["--check", str(stale)]) == 1
-    assert generate_main(["--check", str(MIGRATION_003)]) == 0
+# ---------------------------------------------------------------- generated DDL (starting point for a migration)
+def test_generator_writes_ddl(tmp_path):
+    out = tmp_path / "ddl.sql"
+    assert generate_main(["--out", str(out)]) == 0
+    assert out.read_text(encoding="utf-8") == generate_sql()
 
 
 def test_generated_sql_shape():
     sql = generate_sql()
-    for table in ["extract_snapshot", "ref_code", "ref_state_pin", *(t.name for t in ENTITY_TABLES.values())]:
+    for table in ["extract_snapshot", "ref_code", "ref_state_pin", "ref_code_translation", "ref_code_group",
+                  *(t.name for t in ENTITY_TABLES.values())]:
         assert f"CREATE TABLE {table} (" in sql
     assert "ON DELETE CASCADE" in sql and "AUTO_INCREMENT" in sql
-    assert sql.count("INSERT INTO") == 2
+    assert "INSERT INTO" not in sql                       # reference rows: submissions.reference seed
 
 
 # ---------------------------------------------------------------- tables
@@ -101,8 +101,8 @@ def test_reference_rows():
     rows = ref_code_rows()
     assert len(rows) == sum(len(cl.codes) for cl in canonical_model().code_lists.values())
     pins = {r["state_code"]: (r["pin_prefix_min"], r["pin_prefix_max"]) for r in ref_state_pin_rows()}
-    assert pins["27"] == (40, 44) and pins["99"] == (90, 99) and "77" not in pins
-    assert len(pins) == 37   # states 01-25, 27-37 and APO 99 (foreign 77 has no range)
+    assert pins["MAHARASHTRA"] == (40, 44) and pins["APO"] == (90, 99) and "FOREIGN" not in pins
+    assert len(pins) == 37   # consumer states 01-25, 27-37 and APO 99 (foreign 77 has no range)
 
 
 def test_tables_create_and_round_trip(engine):

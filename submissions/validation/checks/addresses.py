@@ -6,7 +6,7 @@ import re
 
 from submissions.canonical.definition import canonical_model
 
-FOREIGN = "77"
+FOREIGN = "FOREIGN"                     # canonical state_code value
 
 
 def pin_ranges() -> dict[str, tuple[int, int]]:

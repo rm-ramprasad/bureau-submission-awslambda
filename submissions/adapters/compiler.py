@@ -1,7 +1,7 @@
 """Compile a tenant mapping into plain MySQL: one SELECT (or UNION ALL) per canonical entity.
 
 The generated SQL is what actually runs, so it is written out for review:
-  python -m submissions.adapters.compiler clients/nbfc_001/mapping.yaml --schema nbfc_001 --out clients/nbfc_001/generated
+  python -m submissions.adapters.compiler clients/nbfc_001/consumer.yaml --schema nbfc_001 --out clients/nbfc_001/generated/consumer
 """
 
 from __future__ import annotations

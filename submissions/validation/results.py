@@ -18,25 +18,28 @@ from submissions.validation.tables import record_outcome, validation_finding, va
 OUTCOME_ORDER = ["REJECT_FILE", "REJECT_RECORD", "REJECT_SEGMENT", "REJECT_FIELD", "WARN"]
 EXPORT_COLUMNS = ["rule_id", "outcome", "segment", "field", "account_key", "party_key", "value", "message"]
 
-# Business view of the findings: categories (in display order) and what each outcome does to the file.
-CATEGORIES = {"MINIMUM": "Minimum reporting requirements", "PERSONAL": "Name & personal details",
-              "IDENTITY": "Identity documents", "CONTACT": "Contact details", "ADDRESS": "Address",
-              "LOAN": "Loan details", "CUSTOM": "NBFC-specific checks"}
-_SEGMENT_CATEGORY = {"REC": "MINIMUM", "PN": "PERSONAL", "ID": "IDENTITY", "PT": "CONTACT", "EC": "CONTACT",
-                     "PA": "ADDRESS", "TL": "LOAN", "TH": "LOAN"}
+# What each outcome does to the file, in business terms (the outcomes are the same for every submission type).
 EFFECTS = {"REJECT_FILE": "Blocks the whole file", "REJECT_RECORD": "Not reported",
            "REJECT_SEGMENT": "Partly reported", "REJECT_FIELD": "Value dropped", "WARN": "Warning only"}
 _GAP_OUTCOMES = (str(Outcome.REJECT_SEGMENT), str(Outcome.REJECT_FIELD))
 
 
-def category(rule_id: str, segment: str | None, overrides: dict[str, str] | None = None) -> str:
-    """Category of a rule: the pack's `category:` if set, else from the rule ID (UCRF.<seg>.…) or its segment."""
-    if overrides and rule_id in overrides:
-        return overrides[rule_id]
-    if not rule_id.startswith("UCRF."):
-        return "CUSTOM"
-    token = rule_id.split(".")[1]               # REQUIRED / ENUM rules are generated: use their segment
-    return _SEGMENT_CATEGORY.get(token) or _SEGMENT_CATEGORY.get(segment or "", "LOAN")
+@dataclass(frozen=True)
+class ReportHints:
+    """What the submission type's rule pack says about presenting findings (rules.Pack.report_hints)."""
+    categories: dict[str, str]                  # key -> label, display order
+    custom_category: str                        # rules the pack does not know (tenant custom rules)
+    rule_category: dict[str, str]               # built-in rule_id -> category key
+    expected: frozenset[str] = frozenset()      # rules that are the spec's normal handling
+
+    def category(self, rule_id: str) -> str:
+        return self.rule_category.get(rule_id, self.custom_category)
+
+
+def _hints(engine: Engine, snapshot_id: int) -> ReportHints:
+    from submissions.snapshot import SnapshotRepository
+    from submissions.validation.rules import report_hints
+    return report_hints(SnapshotRepository(engine).get(snapshot_id).submission_type)
 
 
 @dataclass(frozen=True)
@@ -91,11 +94,13 @@ def _finding_records(snapshot_id: int):
 EXPECTED_EFFECT = "Spec rule (no action)"
 
 
-def report(engine: Engine, snapshot_id: int, overrides: dict[str, str] | None = None,
-           expected: frozenset[str] = frozenset()) -> dict:
+def report(engine: Engine, snapshot_id: int, hints: ReportHints | None = None) -> dict:
     """Findings for business users: record KPIs, rejected records by main reason's category, and per category the
     rules with their message, effect, findings and records affected. Counts are records, not findings.
-    `expected` rules (the spec's normal handling) are listed last and never count as gaps."""
+    Categories come from the snapshot type's rule pack (`hints`, loaded when not given); its `expected` rules (the
+    spec's normal handling) are listed last and never count as gaps."""
+    hints = hints or _hints(engine, snapshot_id)
+    category, expected = hints.category, hints.expected
     o = record_outcome.c
     fr = _finding_records(snapshot_id)
     with engine.connect() as conn:
@@ -112,7 +117,6 @@ def report(engine: Engine, snapshot_id: int, overrides: dict[str, str] | None = 
                                     func.min(f.message).label("message"), func.count().label("findings"))
                              .where(f.snapshot_id == snapshot_id).group_by(f.rule_id, f.outcome)).all()
 
-    segments = {r.rule_id: r.segment for r in rules}
     records = defaultdict(set)                  # (rule_id, outcome) -> records it hits
     gaps, gaps_by_cat = set(), defaultdict(set)
     for x in hits:
@@ -120,23 +124,23 @@ def report(engine: Engine, snapshot_id: int, overrides: dict[str, str] | None = 
         records[(x.rule_id, x.outcome)].add(key)
         if x.outcome in _GAP_OUTCOMES and x.rec == str(RecordOutcome.ACCEPTED) and x.rule_id not in expected:
             gaps.add(key)
-            gaps_by_cat[category(x.rule_id, segments.get(x.rule_id), overrides)].add(key)
+            gaps_by_cat[category(x.rule_id)].add(key)
     not_reported = defaultdict(int)
     for rule_id, n in reasons:
-        not_reported[category(rule_id, segments.get(rule_id), overrides) if rule_id else "MINIMUM"] += n
+        not_reported[category(rule_id or "")] += n
 
     rank = {x: i for i, x in enumerate(OUTCOME_ORDER)}
     by_cat = defaultdict(list)
     for r in rules:
         is_expected = r.rule_id in expected and r.outcome in _GAP_OUTCOMES + (str(Outcome.WARN),)
-        by_cat[category(r.rule_id, r.segment, overrides)].append(dict(
+        by_cat[category(r.rule_id)].append(dict(
             rule_id=r.rule_id, outcome=r.outcome, message=r.message, expected=is_expected,
             effect=EXPECTED_EFFECT if is_expected else EFFECTS.get(r.outcome, r.outcome),
             findings=r.findings, records=len(records[(r.rule_id, r.outcome)])))
     categories = [dict(key=k, label=label, not_reported=not_reported.get(k, 0), with_gaps=len(gaps_by_cat[k]),
                        rules=sorted(by_cat[k], key=lambda r: (r["expected"], rank.get(r["outcome"], 99),
                                                               -r["records"], r["rule_id"])))
-                  for k, label in CATEGORIES.items() if by_cat[k]]
+                  for k, label in hints.categories.items() if by_cat[k]]
     accepted, rejected = totals.get(str(RecordOutcome.ACCEPTED), 0), totals.get(str(RecordOutcome.REJECTED), 0)
     return dict(kpis=dict(records=accepted + rejected, reported=accepted, not_reported=rejected, with_gaps=len(gaps)),
                 not_reported_by_category=[dict(key=c["key"], label=c["label"], records=c["not_reported"])
@@ -145,13 +149,13 @@ def report(engine: Engine, snapshot_id: int, overrides: dict[str, str] | None = 
                 categories=categories, effects=EFFECTS, expected_rules=sorted(expected))
 
 
-def category_rule_ids(engine: Engine, snapshot_id: int, key: str, overrides: dict[str, str] | None = None) -> tuple:
+def category_rule_ids(engine: Engine, snapshot_id: int, key: str, hints: ReportHints | None = None) -> tuple:
     """The rule IDs of this snapshot's findings that fall in one category (for the Findings page filter)."""
+    hints = hints or _hints(engine, snapshot_id)
     f = validation_finding.c
     with engine.connect() as conn:
-        rows = conn.execute(select(f.rule_id, func.min(f.segment)).where(f.snapshot_id == snapshot_id)
-                            .group_by(f.rule_id)).all()
-    return tuple(r for r, seg in rows if category(r, seg, overrides) == key)
+        rows = conn.execute(select(f.rule_id).where(f.snapshot_id == snapshot_id).distinct()).scalars().all()
+    return tuple(r for r in rows if hints.category(r) == key)
 
 
 def findings(engine: Engine, snapshot_id: int, flt: FindingFilter, limit: int = 200, offset: int = 0) -> tuple[list, int]:

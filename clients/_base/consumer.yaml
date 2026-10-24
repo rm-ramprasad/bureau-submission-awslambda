@@ -1,98 +1,99 @@
 # Base mapping: standard LMS layout (borrower_demographics + account_details) -> canonical model.
 # Tenant files extend this and override only what differs. See submissions/adapters/mapping.py for the format.
+submission_type: CONSUMER
 canonical_version: "1.0"
 
 lookups:
-  gender: {M: "2", F: "1", T: "3"}
-  occupation: {SALARIED: "01", PROFESSIONAL: "02", SELF_EMPLOYED: "03", OTHER: "04"}
+  gender: {M: MALE, F: FEMALE, T: TRANSGENDER}
+  occupation: {SALARIED: SALARIED, PROFESSIONAL: SELF_EMPLOYED_PROFESSIONAL, SELF_EMPLOYED: SELF_EMPLOYED, OTHER: OTHERS}
   # Quote words YAML reads as booleans (on/off/yes/no/true/false, any case), e.g. "OFF". The loader rejects them.
-  income_basis: {GROSS: "G", NET: "N"}
-  income_period: {MONTHLY: "M", ANNUAL: "A"}
-  phone_type: {MOBILE: "01", HOME: "02", OFFICE: "03", OTHER: "00"}
-  address_category: {PERM: "01", RES: "02", "OFF": "03", OTH: "04", MORT: "05"}
-  residence_code: {OWN: "01", RENT: "02"}
+  income_basis: {GROSS: GROSS, NET: NET}
+  income_period: {MONTHLY: MONTHLY, ANNUAL: ANNUAL}
+  phone_type: {MOBILE: MOBILE, HOME: HOME, OFFICE: OFFICE, OTHER: NOT_CLASSIFIED}
+  address_category: {PERM: PERMANENT, RES: RESIDENCE, "OFF": OFFICE, OTH: NOT_CATEGORIZED, MORT: MORTGAGE_PROPERTY}
+  residence_code: {OWN: OWNED, RENT: RENTED}
   state:
-    Jammu & Kashmir: "01"
-    Himachal Pradesh: "02"
-    Punjab: "03"
-    Chandigarh: "04"
-    Uttarakhand: "05"
-    Haryana: "06"
-    Delhi: "07"
-    Rajasthan: "08"
-    Uttar Pradesh: "09"
-    Bihar: "10"
-    Sikkim: "11"
-    Arunachal Pradesh: "12"
-    Nagaland: "13"
-    Manipur: "14"
-    Mizoram: "15"
-    Tripura: "16"
-    Meghalaya: "17"
-    Assam: "18"
-    West Bengal: "19"
-    Jharkhand: "20"
-    Odisha: "21"
-    Orissa: "21"
-    Chhattisgarh: "22"
-    Madhya Pradesh: "23"
-    Gujarat: "24"
-    Maharashtra: "27"
-    Andhra Pradesh: "28"
-    Karnataka: "29"
-    Goa: "30"
-    Kerala: "32"
-    Tamil Nadu: "33"
-    Puducherry: "34"
-    Telangana: "36"
-    Ladakh: "37"
-    Foreign: "77"
-    APO: "99"
+    Jammu & Kashmir: JAMMU_KASHMIR
+    Himachal Pradesh: HIMACHAL_PRADESH
+    Punjab: PUNJAB
+    Chandigarh: CHANDIGARH
+    Uttarakhand: UTTARAKHAND
+    Haryana: HARYANA
+    Delhi: DELHI
+    Rajasthan: RAJASTHAN
+    Uttar Pradesh: UTTAR_PRADESH
+    Bihar: BIHAR
+    Sikkim: SIKKIM
+    Arunachal Pradesh: ARUNACHAL_PRADESH
+    Nagaland: NAGALAND
+    Manipur: MANIPUR
+    Mizoram: MIZORAM
+    Tripura: TRIPURA
+    Meghalaya: MEGHALAYA
+    Assam: ASSAM
+    West Bengal: WEST_BENGAL
+    Jharkhand: JHARKHAND
+    Odisha: ODISHA
+    Orissa: ODISHA
+    Chhattisgarh: CHHATTISGARH
+    Madhya Pradesh: MADHYA_PRADESH
+    Gujarat: GUJARAT
+    Maharashtra: MAHARASHTRA
+    Andhra Pradesh: ANDHRA_PRADESH
+    Karnataka: KARNATAKA
+    Goa: GOA
+    Kerala: KERALA
+    Tamil Nadu: TAMIL_NADU
+    Puducherry: PUDUCHERRY
+    Telangana: TELANGANA
+    Ladakh: LADAKH
+    Foreign: FOREIGN
+    APO: APO
   account_type:
-    HL: "02"
-    LAP: "03"
-    PL: "05"
-    AL: "01"
-    UCL: "32"
-    TWL: "13"
-    CVL: "17"
-    GL: "07"
-    EDU: "08"
-    CDL: "06"
-    BLU: "61"
-    BLS: "50"
-    MFP: "41"
-    MFB: "40"
-    KCC: "36"
-    LAS: "04"
-    LOC: "37"
-    CC: "10"
-    SCC: "31"
-    CCC: "35"
-    FLC: "16"
-    OD: "12"
-  ownership: {PRIMARY: "1", ADDON: "2", GUARANTOR: "3", JOINT: "4", DECEASED: "5"}
-  suit_status: {NONE: "00", SUIT_FILED: "01", WILFUL: "02", SUIT_WILFUL: "03"}
+    HL: HOUSING_LOAN
+    LAP: PROPERTY_LOAN
+    PL: PERSONAL_LOAN
+    AL: AUTO_LOAN
+    UCL: USED_CAR_LOAN
+    TWL: TWO_WHEELER_LOAN
+    CVL: COMMERCIAL_VEHICLE_LOAN
+    GL: GOLD_LOAN
+    EDU: EDUCATION_LOAN
+    CDL: CONSUMER_LOAN
+    BLU: BUSINESS_LOAN_UNSECURED
+    BLS: BUSINESS_LOAN_SECURED
+    MFP: MICROFINANCE_PERSONAL_LOAN
+    MFB: MICROFINANCE_BUSINESS_LOAN
+    KCC: KISAN_CREDIT_CARD
+    LAS: LOAN_AGAINST_SHARES_SECURITIES
+    LOC: LOAN_ON_CREDIT_CARD
+    CC: CREDIT_CARD
+    SCC: SECURED_CREDIT_CARD
+    CCC: CORPORATE_CREDIT_CARD
+    FLC: FLEET_CARD
+    OD: OVERDRAFT
+  ownership: {PRIMARY: INDIVIDUAL, ADDON: AUTHORISED_USER, GUARANTOR: GUARANTOR, JOINT: JOINT, DECEASED: DECEASED}
+  suit_status: {NONE: NO_SUIT_FILED, SUIT_FILED: SUIT_FILED, WILFUL: WILFUL_DEFAULT, SUIT_WILFUL: SUIT_FILED_WILFUL_DEFAULT}
   facility_status:
-    RESTRUCT_COVID: "12"
-    WRITTEN_OFF: "02"
-    SETTLED: "03"
-    POST_WO_SETTLED: "04"
-    AUCTIONED_SETTLED: "15"
-    REPOSSESSED_SETTLED: "16"
-    GUARANTEE_INVOKED: "17"
-  asset_classification: {STD: "01", SUB: "02", DBT: "03", LOSS: "04", SMA: "05"}
-  collateral_type: {NONE: "00", PROPERTY: "01", GOLD: "02", SHARES: "03", DEPOSIT: "04", MULTIPLE: "05", OTHER: "06"}
+    RESTRUCT_COVID: RESTRUCTURED_DUE_TO_COVID_19
+    WRITTEN_OFF: WRITTEN_OFF
+    SETTLED: SETTLED
+    POST_WO_SETTLED: POST_WO_SETTLED
+    AUCTIONED_SETTLED: AUCTIONED_SETTLED
+    REPOSSESSED_SETTLED: REPOSSESSED_SETTLED
+    GUARANTEE_INVOKED: GUARANTEE_INVOKED
+  asset_classification: {STD: STANDARD, SUB: SUBSTANDARD, DBT: DOUBTFUL, LOSS: LOSS, SMA: SPECIAL_MENTION_ACCOUNT}
+  collateral_type: {NONE: NONE, PROPERTY: PROPERTY, GOLD: GOLD, SHARES: SHARES, DEPOSIT: SAVINGS_ACCOUNT_FD, MULTIPLE: MULTIPLE_SECURITIES, OTHER: OTHERS}
   payment_frequency:
-    WEEKLY: "01"
-    FORTNIGHTLY: "02"
-    MONTHLY: "03"
-    QUARTERLY: "04"
-    BULLET: "05"
-    DAILY: "06"
-    HALFYEARLY: "07"
-    YEARLY: "08"
-    ONDEMAND: "09"
+    WEEKLY: WEEKLY
+    FORTNIGHTLY: FORTNIGHTLY
+    MONTHLY: MONTHLY
+    QUARTERLY: QUARTERLY
+    BULLET: BULLET
+    DAILY: DAILY
+    HALFYEARLY: HALF_YEARLY
+    YEARLY: YEARLY
+    ONDEMAND: ON_DEMAND
 
 entities:
   party:
@@ -112,38 +113,38 @@ entities:
       pan:
         from: "{schema}.borrower_demographics b"
         where: b.pan_number IS NOT NULL
-        columns: {party_key: b.customer_id, id_type: "'01'", id_number: b.pan_number}
+        columns: {party_key: b.customer_id, id_type: "'PAN'", id_number: b.pan_number}
       passport:
         from: "{schema}.borrower_demographics b"
         where: b.passport_number IS NOT NULL
-        columns: {party_key: b.customer_id, id_type: "'02'", id_number: b.passport_number,
+        columns: {party_key: b.customer_id, id_type: "'PASSPORT'", id_number: b.passport_number,
                   issue_date: b.passport_issue_date, expiry_date: b.passport_expiry_date}
       voter_id:
         from: "{schema}.borrower_demographics b"
         where: b.voter_id_number IS NOT NULL
-        columns: {party_key: b.customer_id, id_type: "'03'", id_number: b.voter_id_number,
+        columns: {party_key: b.customer_id, id_type: "'VOTER_ID'", id_number: b.voter_id_number,
                   issue_date: b.voter_id_issue_date}
       driving_licence:
         from: "{schema}.borrower_demographics b"
         where: b.driving_license_number IS NOT NULL
-        columns: {party_key: b.customer_id, id_type: "'04'", id_number: b.driving_license_number,
+        columns: {party_key: b.customer_id, id_type: "'DRIVING_LICENCE'", id_number: b.driving_license_number,
                   issue_date: b.driving_license_issue_date, expiry_date: b.driving_license_expiry_date}
       ration_card:
         from: "{schema}.borrower_demographics b"
         where: b.ration_card_number IS NOT NULL
-        columns: {party_key: b.customer_id, id_type: "'05'", id_number: b.ration_card_number}
+        columns: {party_key: b.customer_id, id_type: "'RATION_CARD'", id_number: b.ration_card_number}
       aadhaar:
         from: "{schema}.borrower_demographics b"
         where: b.aadhaar_number IS NOT NULL
-        columns: {party_key: b.customer_id, id_type: "'06'", id_number: b.aadhaar_number}
+        columns: {party_key: b.customer_id, id_type: "'AADHAAR'", id_number: b.aadhaar_number}
       ckyc:
         from: "{schema}.borrower_demographics b"
         where: b.ckyc_number IS NOT NULL
-        columns: {party_key: b.customer_id, id_type: "'09'", id_number: b.ckyc_number}
+        columns: {party_key: b.customer_id, id_type: "'CKYC'", id_number: b.ckyc_number}
       gram_g:
         from: "{schema}.borrower_demographics b"
         where: b.gram_g_id IS NOT NULL
-        columns: {party_key: b.customer_id, id_type: "'10'", id_number: b.gram_g_id}
+        columns: {party_key: b.customer_id, id_type: "'G_RAM_G'", id_number: b.gram_g_id}
 
   party_phone:           # phone slots 1-4 -> one row per number present
     selects:
@@ -196,7 +197,7 @@ entities:
           address_line_4: b.address1_city
           state_code: {expr: b.address1_state, lookup: state}
           pin_code: b.address1_pin_code
-          address_category: {expr: b.address1_type, lookup: address_category, default: "04"}
+          address_category: {expr: b.address1_type, lookup: address_category, default: NOT_CATEGORIZED}
           residence_code: {expr: b.address1_tenure, lookup: residence_code}
           priority: "1"
       address2:
@@ -210,7 +211,7 @@ entities:
           address_line_4: b.address2_city
           state_code: {expr: b.address2_state, lookup: state}
           pin_code: b.address2_pin_code
-          address_category: {expr: b.address2_type, lookup: address_category, default: "04"}
+          address_category: {expr: b.address2_type, lookup: address_category, default: NOT_CATEGORIZED}
           residence_code: {expr: b.address2_tenure, lookup: residence_code}
           priority: "2"
       address3:
@@ -224,7 +225,7 @@ entities:
           address_line_4: b.address3_city
           state_code: {expr: b.address3_state, lookup: state}
           pin_code: b.address3_pin_code
-          address_category: {expr: b.address3_type, lookup: address_category, default: "04"}
+          address_category: {expr: b.address3_type, lookup: address_category, default: NOT_CATEGORIZED}
           residence_code: {expr: b.address3_tenure, lookup: residence_code}
           priority: "3"
 

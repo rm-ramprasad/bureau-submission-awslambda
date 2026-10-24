@@ -64,8 +64,11 @@ def apply_migrations(engine: Engine, migrations_dir: Path = MIGRATIONS_DIR) -> l
 def main() -> None:
     settings = Settings.from_env()
     configure_logging(settings.log_level)
-    applied = apply_migrations(make_engine(settings.database_url))
+    engine = make_engine(settings.database_url)
+    applied = apply_migrations(engine)
     log.info("Applied %d migration(s): %s", len(applied), ", ".join(applied) or "none")
+    from submissions.reference import seed
+    log.info("Reference data: %s", seed(engine))
 
 
 if __name__ == "__main__":

@@ -300,7 +300,7 @@ def batch(batch_id: str):
         except SnapshotNotFoundError:
             continue
         snapshots.append({"snapshot": snap, "records": results.record_counts(s.engine, snapshot_id),
-                          "report": results.report(s.engine, snapshot_id, *rules.report_hints(snap.submission_type)),
+                          "report": results.report(s.engine, snapshot_id, rules.report_hints(snap.submission_type)),
                           "adjusted": applied_summary(s.engine, snapshot_id)})
     validated = {x["snapshot"].snapshot_id for x in snapshots if x["snapshot"].status is SnapshotStatus.VALIDATED}
     generate_from = [{"request_id": r.request_id, "submission_type": r.submission_type, "snapshot_id": r.snapshot_id,
@@ -642,10 +642,10 @@ def override_from_findings(snapshot_id: int):
 def _filter(snap) -> results.FindingFilter:
     """Filter from the query string; ?category= is resolved to that category's rule IDs in this snapshot."""
     cat = request.args.get("category") or None
-    if cat and cat not in results.CATEGORIES:
+    hints = rules.report_hints(snap.submission_type)
+    if cat and cat not in hints.categories:
         fail(f"Unknown category {cat}")
-    rule_ids = results.category_rule_ids(svc().engine, snap.snapshot_id, cat,
-                                         rules.report_hints(snap.submission_type)[0]) if cat else None
+    rule_ids = results.category_rule_ids(svc().engine, snap.snapshot_id, cat, hints) if cat else None
     return results.FindingFilter(rule_ids=rule_ids, **{k: request.args.get(k) or None for k in (
         "rule_id", "outcome", "account_key", "party_key")})
 
@@ -657,7 +657,7 @@ def findings(snapshot_id: int):
     flt = _filter(snap)
     page = max(1, request.args.get("page", 1, type=int))
     rows, total = results.findings(s.engine, snapshot_id, flt, PAGE_SIZE, (page - 1) * PAGE_SIZE)
-    return jsonify(snapshot=snap, report=results.report(s.engine, snapshot_id, *rules.report_hints(snap.submission_type)),
+    return jsonify(snapshot=snap, report=results.report(s.engine, snapshot_id, rules.report_hints(snap.submission_type)),
                    records=results.record_counts(s.engine, snapshot_id), findings=rows, total=total, filter=flt,
                    page=page, pages=max(1, math.ceil(total / PAGE_SIZE)),
                    overridable=[f.value for f in OverrideField])
@@ -687,7 +687,7 @@ def findings_csv(snapshot_id: int):
 def _rule_kind(rule, custom_defs=None) -> str:
     if rule.source == "CUSTOM":
         return "Custom (form)" if custom_defs and rule.rule_id in custom_defs else "Custom SQL"
-    if rule.rule_id.startswith(("UCRF.REQUIRED.", "UCRF.ENUM.")):
+    if rule.generated:
         return "Generated"
     return {"sql": "SQL", "python": "Python", "cascade": "Record decision"}[rule.kind]
 

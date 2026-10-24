@@ -157,7 +157,9 @@ def jobs(event, context):
         return _retention(event)
     if job == "migrate":
         from submissions.migrate import apply_migrations
-        return {"applied": apply_migrations(engine(), TASK_ROOT / "migrations")}
+        from submissions.reference import seed
+        applied = apply_migrations(engine(), TASK_ROOT / "migrations")
+        return {"applied": applied, "reference": seed(engine())}         # reference rows after the schema
     if job == "users":
         return _users(event)
     raise ValueError(f"Unknown job {job!r}: use schedule, recovery, retention, migrate or users")
