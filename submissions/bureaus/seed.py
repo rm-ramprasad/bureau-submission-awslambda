@@ -54,6 +54,17 @@ def seed(repo: BureauRepository, tenant_ids: list[str]) -> int:
     return len(profiles)
 
 
+def seed_missing(repo: BureauRepository, tenant_id: str) -> int:
+    """Add the placeholder profiles one NBFC does not have yet (e.g. a new submission type); existing profiles,
+    real member IDs included, are never changed. Runs with every migrate (jobs Lambda), for the deployment's NBFC."""
+    have = {(p.bureau_code, p.submission_type) for p in repo.list(tenant_id, active_only=False)}
+    missing = [p for p in placeholder_profiles(tenant_id, 1, tenant_id.upper().replace("_", " "))
+               if (p.bureau_code, p.submission_type) not in have]
+    for p in missing:
+        repo.upsert(p)
+    return len(missing)
+
+
 def main() -> None:
     tenant_ids = sys.argv[1:]
     if not tenant_ids:

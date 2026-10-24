@@ -158,8 +158,13 @@ def jobs(event, context):
     if job == "migrate":
         from submissions.migrate import apply_migrations
         from submissions.reference import seed
+        from submissions.bureaus import BureauRepository
+        from submissions.bureaus.seed import seed_missing
         applied = apply_migrations(engine(), TASK_ROOT / "migrations")
-        return {"applied": applied, "reference": seed(engine())}         # reference rows after the schema
+        result = {"applied": applied, "reference": seed(engine())}       # reference rows after the schema
+        if settings().tenant:                                             # placeholder profiles it lacks, never edits
+            result["bureau_profiles_added"] = seed_missing(BureauRepository(engine()), settings().tenant)
+        return result
     if job == "users":
         return _users(event)
     raise ValueError(f"Unknown job {job!r}: use schedule, recovery, retention, migrate or users")

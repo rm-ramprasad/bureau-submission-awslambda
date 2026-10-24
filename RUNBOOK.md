@@ -125,7 +125,9 @@ Run a job by hand: `aws lambda invoke --function-name $fn --cli-binary-format ra
 - `{"job":"schedule","cycle":"ME","as_of":"2026-09-30","tenants":["nbfc_001"]}`
 - `{"job":"retention","days":90,"dry_run":true}`
 - `{"job":"recovery"}`
-- `{"job":"migrate"}`
+- `{"job":"migrate"}`: pending migrations, then the missing reference rows, then any placeholder bureau profiles the
+  NBFC does not have yet (e.g. after a new submission type). Existing rows and real member IDs are never changed.
+  `deploy.ps1` runs it on every backend deploy.
 
 ## Monitoring and troubleshooting
 

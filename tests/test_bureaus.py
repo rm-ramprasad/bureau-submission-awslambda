@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from submissions.bureaus import BureauProfileNotFoundError, InvalidFileNamePatternError
-from submissions.bureaus.seed import placeholder_profiles, seed
+from submissions.bureaus.seed import placeholder_profiles, seed, seed_missing
 from submissions.enums import BureauCode as B, SubmissionType as T
 
 NBFC1, NBFC2 = "nbfc_001", "nbfc_002"
@@ -20,6 +20,16 @@ def test_seed_loads_four_bureaus_per_tenant_and_type(bureau_repo):
     assert (cibil.member_id, cibil.header_segment_tag) == ("CIBC000001", "")
     assert cibil.file_name(datetime(2026, 10, 5, 9, 30), date(2026, 9, 30), "ME") ==         "Commercial-ME-30092026-CIBC000001-093000.txt"
     assert cibil.file_name(datetime(2026, 10, 5, 9, 30), date(2026, 9, 30)).startswith("Commercial-AH-")
+
+
+def test_seed_missing_adds_new_types_and_keeps_real_values(bureau_repo):
+    for p in placeholder_profiles(NBFC1, 1, "ONE")[:4]:             # consumer only, as before commercial existed
+        bureau_repo.upsert(p)
+    real = replace(bureau_repo.get(NBFC1, "CIBIL", "CONSUMER"), member_id="REAL123456")
+    bureau_repo.upsert(real)
+    assert seed_missing(bureau_repo, NBFC1) == 4                     # the four commercial profiles
+    assert bureau_repo.get(NBFC1, "CIBIL", "CONSUMER").member_id == "REAL123456"
+    assert seed_missing(bureau_repo, NBFC1) == 0
 
 
 def test_seed_is_rerunnable(bureau_repo):
