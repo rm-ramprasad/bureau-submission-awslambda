@@ -1,4 +1,4 @@
-"""ID number format rules per ID type (spec §7.1)."""
+"""ID number format rules per (canonical) ID type: consumer spec §7.1, commercial Annexure D part C."""
 
 from __future__ import annotations
 
@@ -21,6 +21,10 @@ DEFAULT_PATTERNS = {
     "id_pattern_voter": r"^(?=.{9,}$)[A-Z]{2,3}[A-Z0-9]+$",
     "id_pattern_ckyc": r"^[A-Z0-9]{1,15}$",
     "id_pattern_gram_g": r"^[A-Z]{2}-[0-9]{2}-[0-9]{3}-[0-9]{3}-[0-9]{3}/[0-9]{3}[A-Za-z0-9]+$",
+    "id_pattern_cin": r"^[A-Z0-9]{21}$",
+    "id_pattern_tin": r"^[A-Z0-9]{11}$",
+    "id_pattern_udyam": r"^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$",
+    "id_pattern_din": r"^[0-9]{8}$",
 }
 _MESSAGES = {  # used while the default pattern applies; a changed pattern is named in the message instead
     "id_pattern_pan": "PAN must be 5 letters, 4 digits, 1 letter with 4th letter P or H",
@@ -28,9 +32,15 @@ _MESSAGES = {  # used while the default pattern applies; a changed pattern is na
     "id_pattern_voter": "voter ID must be >= 9 chars starting with 2-3 letters",
     "id_pattern_ckyc": "CKYC must be up to 15 letters/digits",
     "id_pattern_gram_g": "G RAM G must look like SS-DD-BBB-GGG-VVV/HHHSurname",
+    "id_pattern_cin": "CIN must be 21 letters and digits",
+    "id_pattern_tin": "TIN must be 11 letters and digits",
+    "id_pattern_udyam": "Udyam number must look like UDYAM-XX-00-0000000",
+    "id_pattern_din": "DIN must be 8 digits",
 }
 _BY_TYPE = {"PAN": "id_pattern_pan", "PASSPORT": "id_pattern_passport", "VOTER_ID": "id_pattern_voter",
-            "CKYC": "id_pattern_ckyc", "G_RAM_G": "id_pattern_gram_g"}      # canonical id_type values
+            "CKYC": "id_pattern_ckyc", "G_RAM_G": "id_pattern_gram_g", "CIN": "id_pattern_cin",
+            "TIN": "id_pattern_tin", "UDYAM": "id_pattern_udyam", "DIN": "id_pattern_din"}   # canonical id_type values
+_KEEP_DELIMITERS = {"G_RAM_G", "UDYAM"}                  # matched with spaces removed, delimiters kept
 
 
 @lru_cache(maxsize=64)
@@ -68,7 +78,9 @@ def id_number_problem(id_type: str, id_number: str | None, patterns: dict | None
     if name is None:
         return None
     pattern = (patterns or {}).get(name) or DEFAULT_PATTERNS[name]
-    value = raw.replace(" ", "") if id_type == "G_RAM_G" else n      # G RAM G keeps its delimiters
+    value = raw.replace(" ", "") if id_type in _KEEP_DELIMITERS else n
+    if id_type == "UDYAM":
+        value = value.upper()
     if _compiled(pattern).match(value):
         return None
     return _MESSAGES[name] if pattern == DEFAULT_PATTERNS[name] else f"does not match the pattern {pattern}"

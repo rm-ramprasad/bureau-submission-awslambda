@@ -10,7 +10,8 @@
 
 Codes are the LMS's own (PVT, CC, STD ...): clients/_base/commercial.yaml translates them. Generated with its own
 random seed, so the consumer mock data (and the consumer golden files) never change because of this module.
-Each facility carries the expected pipeline outcome in its test_* columns (the oracle for the commercial rules).
+Each facility carries its expected record outcome (test_expected: ACCEPT / REJECT_RECORD) and the rule that must
+fire for it (test_rule_reference) in its test_* columns: the oracle for the commercial rules.
 """
 
 from __future__ import annotations
@@ -73,7 +74,8 @@ class _Gen:
                  rating: tuple | None = None, city: tuple | None = None, addresses=("REG",), **over) -> dict:
         self._b += 1
         city = city or self.rnd.choice(CITIES)
-        b = dict(customer_id=f"B{self._b:04d}", business_name=name, short_name=name.split()[0][:20],
+        b = dict(customer_id=f"B{self._b:04d}", business_name=name,
+                 short_name=None if constitution == "IND" else name.split()[0][:20],      # not for individuals
                  constitution=constitution, msme_category=category, industry=industry,
                  bsr_activity_1=self.rnd.choice(["10710", "46900", "62011", "25920", "47190"]), bsr_activity_2=None,
                  bsr_activity_3=None, hsn_code=None, incorporation_date=self.date(date(1990, 1, 1), date(2020, 12, 31)),
@@ -274,25 +276,26 @@ def build(tenant_no: int) -> _Gen:
     # ---------- negative coverage
     b14 = g.borrower("Apex Enterprises", "PROP", category="MICRO", industry="TRD", ids={})
     g.relation(b14, "PROPRIETOR", g.person())
-    g.facility(b14, "TL_MED", no=14, expected="REJECT_RECORD", rule="BS identifiers",
+    g.facility(b14, "TL_MED", no=14, expected="REJECT_RECORD", rule="CUCRF.REC.NO_IDENTIFIER",
                desc="Borrower with no identifier at all")
 
     b15 = g.borrower("Vishal Hardware Stores", "PROP", category="MICRO", industry="TRD", ids={"pan": g.pan("P")})
     g.relation(b15, "PROMOTER_DIR", g.person())
-    g.facility(b15, "OD", no=15, expected="REJECT_SEGMENT:RS", rule="Annexure D part A",
-               desc="Proprietorship reported with a promoter director (not permitted for constitution 30)")
+    g.facility(b15, "OD", no=15, expected="REJECT_RECORD", rule="CUCRF.RS.NOT_FOR_CONSTITUTION",
+               desc="Proprietorship whose only relationship is a promoter director (not permitted for "
+                    "constitution 30): RS rejected, so no relationship remains")
 
     b16 = g.borrower("Metro Builders Private Limited", "PVT", category="SMALL", industry="SVC",
                      ids={"pan": g.pan("C"), "cin": "U45200MH2011"})
     g.relation(b16, "PROMOTER_DIR", g.person(din=f"{g.rnd.randint(10**7, 10**8 - 1)}"))
-    g.facility(b16, "TL_LONG", no=16, expected="WARN", rule="Annexure D part C CIN",
-               desc="CIN shorter than 21 characters (other identifier valid)")
+    g.facility(b16, "TL_LONG", no=16, expected="ACCEPT", rule="CUCRF.BS.ID_FORMAT",
+               desc="CIN shorter than 21 characters: CIN left out, PAN still valid")
 
     b17 = g.borrower("Coastal Seafoods Exports Private Limited", "PVT", category="SMALL", industry="EXP",
                      ids={"pan": g.pan("C"), "cin": g.cin(False)})
     g.relation(b17, "PROMOTER_DIR", g.person(din=f"{g.rnd.randint(10**7, 10**8 - 1)}"))
-    f17 = g.facility(b17, "EBD", no=17, expected="REJECT_SEGMENT:SS", rule="SS field 5",
-                     desc="Security without a charge classification")
+    f17 = g.facility(b17, "EBD", no=17, expected="ACCEPT", rule="CUCRF.REQUIRED.security.security_classification",
+                     desc="Security without a charge classification: SS left out, facility reported")
     g.security(f17, "RECEIVABLES", None)
     return g
 
@@ -355,7 +358,7 @@ def source_tables(md: MetaData) -> dict[str, Table]:
             Column("guarantee_cover", String(10)), Column("remark", String(100)), Column("wilful_date", Date),
             Column("suit_status", String(20)), Column("suit_ref", String(25)), _amount("suit_amount"),
             Column("suit_date", Date), Column("test_scenario_number", Integer), Column("test_expected", String(30)),
-            Column("test_rule_reference", String(40)), Column("test_description", String(255))),
+            Column("test_rule_reference", String(60)), Column("test_description", String(255))),
         "facility_guarantor": Table(
             "facility_guarantor", md, Column("facility_id", String(20)), Column("guarantor_id", String(20)),
             Column("invocation_date", Date), *_party_columns(), PrimaryKeyConstraint("facility_id", "guarantor_id")),

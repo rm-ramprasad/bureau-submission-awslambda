@@ -1,8 +1,8 @@
 # Plan: Commercial UCRF + per-type modules + reference data in the database
 
-Status as of 24-10-2026. Phases 1, 1b, 1c (items 1, 4, 6) merged into main. Phase 2 (commercial model) done on
-branch `phase-2-commercial-model`; migration 014 **not yet executed**. Consumer golden files byte-identical throughout.
-Next: phase 3 (commercial rules).
+Status as of 24-10-2026. Phases 1, 1b, 1c (items 1, 4, 6) and 2 merged into main; migrations 012-014 executed.
+Phase 3 (commercial rules) done on branch `phase-3-commercial-rules` (no DDL). Consumer golden files byte-identical
+throughout. Next: phase 4 (pipe-delimited engine + commercial layout).
 Spec: [docs/specs/Commercial_UCRF_V3_10.md](../specs/Commercial_UCRF_V3_10.md).
 
 ## Decisions (agreed)
@@ -43,7 +43,7 @@ Safeguards to build with DB-master:
 | 1b | Per-type folders, canonical values, reference tables, consumer rewritten — consumer files byte-identical (golden tests) | Yes (012) | **Done** (uncommitted), 434 passed |
 | 1c | DB-master safeguards 1–6 above | Yes (snapshot translation copy, maybe audit fields) | **1, 4, 6 done** (seed insert-missing; freeze per snapshot, migration 013; PIN ranges from the DB, salutation parameter). Left: 2, 3, 5 (admin page) after commercial |
 | 2 | Commercial model: extend `c_party` / `c_party_address` / `c_account`; new `c_relationship`, `c_guarantor`, `c_security`, `c_cheque_dishonour`; neutral product/status taxonomy (union of both specs); commercial mock data + `clients/_base/commercial.yaml` | Yes (014) | **Done** (branch `phase-2-commercial-model`), see below |
-| 3 | `types/commercial/rules.yaml` + cascade (record = facility × borrower via `c_account_holder`; borrower reject rejects all its facilities; RS optional for credit type 9026) | Seed rows | Not started |
+| 3 | `types/commercial/rules.yaml` + cascade (record = facility × borrower via `c_account_holder`; borrower reject rejects all its facilities; RS optional for credit type 9026) | Seed rows | **Done** (branch `phase-3-commercial-rules`), see below |
 | 4 | Generic pipe-delimited engine (`formats/delimited/`) + `types/commercial/layout.yaml`; golden tests; TS counts; CRLF + trailing pipe | No | Not started |
 | 5 | Register commercial pipeline, bureau profiles (placeholder member IDs, `Commercial-<cycle>…` names), report categories | Seed rows | Not started |
 
@@ -106,13 +106,37 @@ Safeguards to build with DB-master:
    empty (layout, phase 4).
 5. CR 35 Wilful Default: 1 when `wilful_default_date` is set, or the consumer-style status says wilful (rules, phase 3).
 
+## Phase 3: what was built (24-10-2026)
+
+- `types/commercial/rules.yaml` (pack `CUCRF-3.10`, prefix `CUCRF.`): 170 rules with the generated REQUIRED / ENUM
+  ones; categories Minimum / Borrower & identifiers / Address & contacts / Relationships & guarantors / Credit
+  facility; 10 parameters (address length, salutations, ID patterns for PAN, CIN, TIN, CKYC, Udyam, DIN, passport,
+  voter ID with commercial defaults).
+- Cascade `facility_borrower_minimums` (validation/cascades.py): record = facility × borrower; rejected by
+  REJECT_RECORD findings (a borrower-level finding rejects all its facilities) or when the borrower has no valid
+  identifier, address or relationship; relationship not needed for credit types in group
+  `relationship_optional_credit_type` (9026).
+- Annexure D parts A / B as groups in `types/commercial/codes.yaml` (`relationship_for_<constitution>`,
+  `relationship_not_for_<related type>`), plus `derivative_credit_type`, `director_relationship_type`: database-master,
+  editable. Seeded by the next `migrate` (insert-missing, no DDL).
+- Python rules: `borrower_name` (2 alphanumerics for a business, Annexure C part C for an individual), and per related
+  entity (relationship, guarantor): name, identifier formats (PAN, voter ID, passport, CIN, DIN, CKYC, Udyam), PIN
+  format / state, meaningless address. `checks/identifiers.py` knows CIN, TIN, Udyam, DIN.
+- Interpretations (in rule messages): related parties registered outside India need no Indian identifier; written-off
+  / settled amounts, suit details, drawing power, wilful default date are WARN (configurable); Annexure D part A is
+  checked only for constitutions it lists (not INDIVIDUAL).
+- Tests: `tests/test_commercial_rules.py` runs extract + validation on both mock schemas and checks every scenario's
+  expected outcome and rule; clean scenarios have no REJECT findings except the spec's expected handling.
+
 ## Next steps
 
 1. ~~Commit 1b~~ done, merged into main; migration 012 executed.
 2. ~~1c item 4~~ done 24-10-2026: `snapshot_code_translation` (migration 013, **not yet executed**).
 3. ~~1c item 6~~ done 24-10-2026 (branch `reference-values-out-of-checks`, no DDL).
 4. ~~Phase 2~~ done 24-10-2026 (branch `phase-2-commercial-model`, migration 014).
-5. **Next:** phase 3, `types/commercial/rules.yaml` + cascade. Admin page (1c items 2, 3, 5) after commercial.
+5. ~~Phase 3~~ done 24-10-2026 (branch `phase-3-commercial-rules`).
+6. **Next:** phase 4, generic pipe-delimited engine + `types/commercial/layout.yaml` (CRLF, trailing pipe, TS counts,
+   CR 15 DPD as 1nnn, CR 26 open / closed from dates, CR 35 wilful flag). Admin page (1c items 2, 3, 5) after commercial.
 
 ## Deploy notes (when 1b ships)
 

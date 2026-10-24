@@ -659,3 +659,30 @@ groups:
   relationship_optional_credit_type: [FACTORING_WITHOUT_RECOURSE]                             # 9026: RS not required
   individual_related_type: [INDIAN_INDIVIDUAL, FOREIGN_INDIVIDUAL]
   entity_related_type: [INDIAN_ENTITY, FOREIGN_ENTITY]
+  derivative_credit_type: [DERIVATIVES, FOREX_FORWARD_CONTRACT, INTEREST_RATE_SWAP, CURRENCY_OPTION,
+                           COMPLEX_RATE_DERIVATIVE, COMPLEX_CURRENCY_DERIVATIVE]               # 5500-6000
+  director_relationship_type: [PROMOTER_DIRECTOR, NOMINEE_DIRECTOR, INDEPENDENT_DIRECTOR, FORMER_DIRECTOR,
+                               OTHER_DIRECTOR]                                                  # DIN: 51-54, 56
+  # Annexure D part A: relationship types permitted per borrower legal constitution (a constitution without a
+  # group, e.g. INDIVIDUAL, is not checked)
+  relationship_for_PRIVATE_LIMITED: [SHAREHOLDER, HOLDING_COMPANY, SUBSIDIARY_COMPANY, PROMOTER_DIRECTOR,
+                                     NOMINEE_DIRECTOR, INDEPENDENT_DIRECTOR, FORMER_DIRECTOR, OTHER_DIRECTOR]
+  relationship_for_PUBLIC_LIMITED: [SHAREHOLDER, HOLDING_COMPANY, SUBSIDIARY_COMPANY, PROMOTER_DIRECTOR,
+                                    NOMINEE_DIRECTOR, INDEPENDENT_DIRECTOR, FORMER_DIRECTOR, OTHER_DIRECTOR]
+  relationship_for_STATUTORY_BODY: [SHAREHOLDER, HOLDING_COMPANY, SUBSIDIARY_COMPANY, NOMINEE_DIRECTOR,
+                                    INDEPENDENT_DIRECTOR, FORMER_DIRECTOR, OTHER_DIRECTOR, OTHERS]
+  relationship_for_PROPRIETORSHIP: [HOLDING_COMPANY, PROPRIETOR, KARTA]
+  relationship_for_PARTNERSHIP: [PARTNER]
+  relationship_for_TRUST: [TRUSTEE]
+  relationship_for_HUF: [KARTA]
+  relationship_for_COOPERATIVE_SOCIETY: [SHAREHOLDER, TRUSTEE, PROMOTER_DIRECTOR, NOMINEE_DIRECTOR,
+                                         INDEPENDENT_DIRECTOR, OTHERS]
+  relationship_for_ASSOCIATION_OF_PERSONS: [TRUSTEE, FORMER_DIRECTOR, OTHERS]
+  relationship_for_GOVERNMENT: [OTHERS]
+  relationship_for_SELF_HELP_GROUP: [SHG_MEMBER]
+  # Annexure D part B: relationship types a kind of related party cannot have
+  relationship_not_for_INDIAN_ENTITY: [PROPRIETOR, PROMOTER_DIRECTOR, NOMINEE_DIRECTOR, INDEPENDENT_DIRECTOR]
+  relationship_not_for_FOREIGN_ENTITY: [TRUSTEE, PROPRIETOR, PROMOTER_DIRECTOR, NOMINEE_DIRECTOR,
+                                        INDEPENDENT_DIRECTOR]
+  relationship_not_for_INDIAN_INDIVIDUAL: [SUBSIDIARY_COMPANY, HOLDING_COMPANY]
+  relationship_not_for_FOREIGN_INDIVIDUAL: [SUBSIDIARY_COMPANY, HOLDING_COMPANY]

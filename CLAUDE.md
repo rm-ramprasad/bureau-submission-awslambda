@@ -54,9 +54,11 @@ Migration/table parity against real MySQL: set `SUBMISSIONS_TEST_MYSQL_URL` to a
   lists only overrides; `tenant.mapping_path` is the client folder. Lookups give canonical values (checked at load).
   Compiled to plain MySQL SELECTs committed under `clients/<tenant>/generated/<type>/` (regenerate after editing a mapping).
   Exceptions are joined into the extract in SQL (`submissions/adjustments/sql.py`), so validation/formatter need no knowledge of them.
-- **Validation:** built-in rules in `submissions/types/consumer/rules.yaml`; algorithmic ones in
-  `python_rules.py` / `checks/`; per-tenant custom SQL rules in `validation_rule` (IDs must not start with `UCRF.`);
-  `validation_policy` overrides enabled/outcome per tenant. SQL rules must use `:snapshot_id`. A cascade computes `record_outcome`.
+- **Validation:** built-in rules per type in `submissions/types/<type>/rules.yaml` (consumer `UCRF.`, commercial
+  `CUCRF.`); algorithmic ones in `python_rules.py` / `checks/`; per-tenant custom SQL rules in `validation_rule` (IDs
+  must not start with a built-in prefix); `validation_policy` overrides enabled/outcome per tenant. SQL rules must use
+  `:snapshot_id`. The pack's cascade computes `record_outcome` (consumer: account × holder; commercial: facility ×
+  borrower, a borrower reject rejects all its facilities).
 - **Formatter:** file format is data — `submissions/types/consumer/layout.yaml` rendered by the generic
   TUDF engine in `submissions/formats/tudf/`. Bureau files differ only by member ID, header tag and file name (from `bureau_profile`).
   `tests/test_ucrf_golden.py` compares output byte-for-byte with `tests/golden/`.
