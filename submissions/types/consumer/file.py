@@ -17,7 +17,7 @@ from submissions.formats.tudf.layout import Layout, load_layout
 from submissions.formats.tudf.parser import ParsedSegment
 from submissions.formats.tudf.parser import parse_records as _parse_records
 from submissions.formats.tudf.snapshot import Drops, SnapshotData
-from submissions.reference import active_translations
+from submissions.reference import snapshot_translations
 from submissions.types import type_definition
 
 LAYOUT_FILE = type_definition(SubmissionType.CONSUMER).path("layout.yaml")
@@ -51,7 +51,7 @@ def header(bureau: BureauProfile, as_of_date: date, cycle: ReportingCycle | None
 def build_file(engine: Engine, snapshot_id: int, as_of_date: date, bureau: BureauProfile,
                cycle: ReportingCycle | None = None, options: FormatOptions = FormatOptions()) -> tuple[bytes, FileStats]:
     with engine.connect() as conn:
-        translations = active_translations(conn, SubmissionType.CONSUMER)
+        translations = snapshot_translations(conn, snapshot_id)      # as validated
     return tudf.build_file(engine, snapshot_id, as_of_date, bureau, cycle, options.apply(layout()), translations)
 
 

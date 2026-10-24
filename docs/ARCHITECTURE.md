@@ -146,7 +146,7 @@ In the extract (`submissions/adjustments/sql.py`), the adjustments are frozen, r
 | `ref_code_translation` | Per submission type: canonical value → file code, `is_active` (no active row = not reportable in that file) | `types/<type>/codes.yaml` |
 | `ref_code_group` | Per submission type: named sets of canonical values used by rules (e.g. `card_account_type`) | `types/<type>/codes.yaml` |
 
-`submissions.reference` runs after the migrations (jobs Lambda `migrate`, `python -m submissions.migrate`) and only inserts missing rows, so changes made in the tables survive deploys. Planned (ROADMAP / plan 1c): an admin page with checks and audit, a frozen copy of the translations per snapshot, YAML export.
+`submissions.reference` runs after the migrations (jobs Lambda `migrate`, `python -m submissions.migrate`) and only inserts missing rows, so changes made in the tables survive deploys. Each validation copies the type's active translations into `snapshot_code_translation`; its code rules and the file read that copy, so an edit after validation never changes a file (re-validate to pick it up). Planned (plan 1c): an admin page with checks and audit, YAML export.
 
 Pipeline tables (`extract_snapshot`, `c_*`, `validation_*`, `record_outcome`) are in [PIPELINE.md](PIPELINE.md). Operations: `audit_event`; `worker_heartbeat` exists but is no longer written.
 

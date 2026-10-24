@@ -96,7 +96,8 @@ def _label(column: str) -> str:
 
 def _generated_rules(pack: str, prefix: str, cfg: dict, segments: dict, tdef: TypeDefinition) -> list[Rule]:
     """REQUIRED rules for the type's required columns (requirements.yaml); code rules for every code column whose
-    list the type translates (codes.yaml): a value without an active translation cannot be written to its file."""
+    list the type translates (codes.yaml): a value without an active translation cannot be written to its file.
+    Code rules read the snapshot's frozen copy (snapshot_code_translation), which the file writer uses too."""
     model, rules = canonical_model(), []
     for entity, edef in model.entities.items():
         acct, party = edef.key_exprs()
@@ -117,9 +118,8 @@ def _generated_rules(pack: str, prefix: str, cfg: dict, segments: dict, tdef: Ty
                     message=f"{_label(col.name)} is not a valid code ({col.code_list})",
                     sql=(f"SELECT x.row_id, {acct} AS account_key, {party} AS party_key, x.{col.name} AS value\n"
                          f"FROM {edef.table} x WHERE x.snapshot_id = :snapshot_id AND x.{col.name} IS NOT NULL\n"
-                         f"  AND x.{col.name} NOT IN (SELECT t.code FROM ref_code_translation t\n"
-                         f"    WHERE t.submission_type = :submission_type AND t.code_list = '{col.code_list}'"
-                         f" AND t.is_active = 1)"), **base))
+                         f"  AND x.{col.name} NOT IN (SELECT t.code FROM snapshot_code_translation t\n"
+                         f"    WHERE t.snapshot_id = :snapshot_id AND t.code_list = '{col.code_list}')"), **base))
     return rules
 
 

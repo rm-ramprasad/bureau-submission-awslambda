@@ -9,7 +9,7 @@
 #   cap / max_len   numbers above cap are written as cap; text cut to max_len after formatting
 #   default         used when the value is missing (a constant or a source path)
 #   translate       canonical code list: the canonical value is written as its consumer code
-#                   (ref_code_translation, seeded from codes.yaml; no active code -> field left out)
+#                   (the snapshot's frozen copy of ref_code_translation; no active code -> field left out)
 #   when            only for these values of another source; only_positive: only when > 0
 # Snapshot values are canonical (FEMALE, CREDIT_CARD, ...): when, default and formatter args use those.
 #   required        no value -> the segment instance is left out (numbering skips it)

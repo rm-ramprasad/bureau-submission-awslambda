@@ -40,7 +40,7 @@ Safeguards to build with DB-master:
 |---|---|---|---|
 | 1 | Generalise engines: record keys in model, pack discovery / prefix / categories / cascade from the pack | No | **Done** (uncommitted), 429 tests passed at that point |
 | 1b | Per-type folders, canonical values, reference tables, consumer rewritten — consumer files byte-identical (golden tests) | Yes (012) | **Done** (uncommitted), 434 passed |
-| 1c | DB-master safeguards 1–6 above | Yes (snapshot translation copy, maybe audit fields) | **1 done** (seed insert-missing). Left: 4 (freeze per snapshot), 6 (no hard-coded reference values), then 2, 3, 5 (admin page) after commercial |
+| 1c | DB-master safeguards 1–6 above | Yes (snapshot translation copy, maybe audit fields) | **1, 4 done** (seed insert-missing; freeze per snapshot, migration 013). Left: 6 (no hard-coded reference values), then 2, 3, 5 (admin page) after commercial |
 | 2 | Commercial model: extend `c_party` / `c_party_address` / `c_account`; new `c_relationship`, `c_guarantor`, `c_security`, `c_cheque_dishonour`; neutral product/status taxonomy (union of both specs); commercial mock data + `clients/_base/commercial.yaml` | Yes | Not started |
 | 3 | `types/commercial/rules.yaml` + cascade (record = facility × borrower via `c_account_holder`; borrower reject rejects all its facilities; RS optional for credit type 9026) | Seed rows | Not started |
 | 4 | Generic pipe-delimited engine (`formats/delimited/`) + `types/commercial/layout.yaml`; golden tests; TS counts; CRLF + trailing pipe | No | Not started |
@@ -51,7 +51,7 @@ Safeguards to build with DB-master:
 - `model.yaml`: neutral code values (exact inverses of the consumer codes); no `required` / `ucrf` on columns; `keys:` per entity.
 - `submissions/types/`: loader for `types/*/codes.yaml` + `requirements.yaml`; `types/consumer/` holds codes, requirements, rules, layout, `file.py` (was `formats/ucrf_consumer`), `pipeline.py` (`PIPELINE`; `pipeline/__init__.py` discovers type folders).
 - Reference tables `ref_code_translation`, `ref_code_group` (migration 012); `submissions/reference.py` seeds **insert-missing only** after migrations and provides `active_translations()`.
-- Layout key `translate: <code_list>`; `when`, `default`, formatter args and the history asset-class map use canonical values. Translations are read from the DB at file time (**not yet frozen per snapshot**: 1c item 4).
+- Layout key `translate: <code_list>`; `when`, `default`, formatter args and the history asset-class map use canonical values. Translations are frozen per snapshot at validation (`snapshot_code_translation`, migration 013, 1c item 4).
 - Mappings per type: `clients/{_base,_template,<t>}/consumer.yaml` with `submission_type: CONSUMER`; lookups give canonical values, checked against the column's code list; required columns from `requirements.yaml`; `mapping_file()` resolves `tenant.mapping_path` as the client folder (an old `…/mapping.yaml` value still works). New tenants copy every `_template/*.yaml`. Compiled SQL under `clients/<t>/generated/consumer/`.
 - `canonical/generate.py` prints DDL only (no INSERTs, no `--check`); the "003 matches the model" tests were removed.
 - Validation: REQUIRED rules from `requirements.yaml`; ENUM rules check active `ref_code_translation` rows for the snapshot's type.
@@ -60,8 +60,8 @@ Safeguards to build with DB-master:
 
 ## Next steps
 
-1. Review and commit 1b (big diff: moves under `submissions/types/`, `clients/*/consumer.yaml`).
-2. 1c item 4: freeze the translations used per snapshot at validation; file generation reads that copy (DDL: new table, e.g. `snapshot_code_translation`).
+1. ~~Commit 1b~~ done, merged into main; migration 012 executed.
+2. ~~1c item 4~~ done 24-10-2026: `snapshot_code_translation` (migration 013, **not yet executed**).
 3. 1c item 6: remaining hard-coded reference values in checks (phone/ID/state constants) → rule settings or `ref_code_group`.
 4. Phase 2 (commercial model) onwards. Admin page (1c items 2, 3, 5) after commercial.
 

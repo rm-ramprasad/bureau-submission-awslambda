@@ -136,7 +136,7 @@ lookups:                                       # client code → canonical value
 
 **As built:**
 - **Built-in rules ship with the code** as a versioned YAML pack, `submissions/types/consumer/rules.yaml`, like the canonical model.
-- **REQUIRED and ENUM rules are generated**: REQUIRED from the type's `requirements.yaml`, ENUM for every code column whose list the type translates (a value without an active row in `ref_code_translation` for the snapshot's type cannot be written). The pack sets their outcomes per entity or column. Pack SQL uses canonical values and `ref_code_group` (`:submission_type` is bound by the engine).
+- **REQUIRED and ENUM rules are generated**: REQUIRED from the type's `requirements.yaml`, ENUM for every code column whose list the type translates (a value without an active translation cannot be written). Validation first freezes the type's active rows of `ref_code_translation` into `snapshot_code_translation`; the ENUM rules and the file writer both read that copy, so a file always matches what was validated. The pack sets their outcomes per entity or column. Pack SQL uses canonical values and `ref_code_group` (`:submission_type` is bound by the engine).
 - **`validation_rule` holds only per-tenant custom SQL rules.** Their IDs may not start with `UCRF.`.
 - **`validation_policy`** overrides the enabled flag and/or outcome of any rule per tenant.
 - **Rule kinds:**
@@ -205,7 +205,7 @@ The file format is **data, not code**. A layout YAML describes it, and a generic
 **How it works:**
 - **Input:** a validated snapshot plus a `BureauProfile`. Only records whose `record_outcome` is accepted are written, with REJECT_FIELD and REJECT_SEGMENT drops applied (history rows are written as loaded).
 - **Output:** the header, then one record per account × holder (the layout's segments, then the record end), then the trailer. Repeating segments are numbered in the order written; an instance with no value for a `required` field is left out.
-- **Codes:** `translate: <code_list>` on a field writes the type's file code for the canonical value (active rows of `ref_code_translation`); no active code leaves the field out (validation has already flagged it). `when`, `default` and formatter args use canonical values.
+- **Codes:** `translate: <code_list>` on a field writes the type's file code for the canonical value (the snapshot's frozen copy, `snapshot_code_translation`; a snapshot without one must be validated again); no active code leaves the field out (validation has already flagged it). `when`, `default` and formatter args use canonical values.
 - **Bureau stamping:** member ID, header segment tag and file name come only from the bureau profile.
 - **Byte-identical duplicate records** are counted and left out (spec §1.4).
 

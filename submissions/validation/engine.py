@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from sqlalchemy import Connection, Engine, delete, func, insert, select, text
 
 from submissions.enums import Outcome, RecordOutcome, SnapshotStatus
+from submissions.reference import freeze_translations
 from submissions.snapshot import SnapshotRepository
 from submissions.validation.cascades import CASCADES
 from submissions.validation.parameters import load_parameters, render_message
@@ -76,7 +77,8 @@ def _clear(conn: Connection, snapshot_id: int) -> None:
 def run_validation(conn: Connection, snapshot_id: int, as_of_date: date, rules: list[Rule],
                    parameters: dict, cascade: Cascade, submission_type: str) -> ValidationResult:
     _clear(conn, snapshot_id)
-    rules = [replace(r, message=render_message(r.message, parameters)) for r in rules]   # {parameter} in messages
+    freeze_translations(conn, snapshot_id, submission_type)     # the code rules below and the file use this copy
+    rules =[replace(r, message=render_message(r.message, parameters)) for r in rules]   # {parameter} in messages
     params = _params(snapshot_id, as_of_date, parameters, submission_type)
     ctx = RuleContext(conn, snapshot_id, as_of_date, parameters)
     active = [r for r in rules if r.enabled]

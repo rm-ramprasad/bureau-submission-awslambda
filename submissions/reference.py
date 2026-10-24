@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import logging
 
-from sqlalchemy import Connection, Engine, Table, select
+from sqlalchemy import Connection, Engine, Table, delete, insert, literal, select
 
 from submissions.canonical.schema import (
     ref_code, ref_code_group, ref_code_rows, ref_code_translation, ref_state_pin, ref_state_pin_rows,
+    snapshot_code_translation,
 )
 from submissions.types import type_definitions
 
@@ -52,14 +53,30 @@ def seed(engine: Engine) -> dict[str, int]:
         return {t.name: _insert_missing(conn, t, rows) for t, rows in work}
 
 
-def active_translations(conn: Connection, submission_type: str) -> dict[str, dict[str, str]]:
-    """What a file writer uses: code list -> canonical value -> file code, active rows only (the same rows the
-    generated code rules accept)."""
-    t = ref_code_translation.c
+class TranslationsNotFrozen(RuntimeError):
+    pass
+
+
+def freeze_translations(conn: Connection, snapshot_id: int, submission_type: str) -> int:
+    """Copy the type's active translations to the snapshot (replacing an earlier copy on re-validation); rows copied.
+    Validation's code rules and the file writer both read this copy."""
+    t, s = ref_code_translation.c, snapshot_code_translation
+    conn.execute(delete(s).where(s.c.snapshot_id == snapshot_id))
+    return conn.execute(insert(s).from_select(
+        ["snapshot_id", "code_list", "code", "output_code"],
+        select(literal(snapshot_id), t.code_list, t.code, t.output_code).where(
+            t.submission_type == str(submission_type), t.is_active.is_(True)))).rowcount
+
+
+def snapshot_translations(conn: Connection, snapshot_id: int) -> dict[str, dict[str, str]]:
+    """What a file writer uses: code list -> canonical value -> file code, as frozen when the snapshot was validated."""
+    s = snapshot_code_translation.c
     out: dict[str, dict[str, str]] = {}
-    for r in conn.execute(select(t.code_list, t.code, t.output_code).where(
-            t.submission_type == str(submission_type), t.is_active.is_(True))):
+    for r in conn.execute(select(s.code_list, s.code, s.output_code).where(s.snapshot_id == snapshot_id)):
         out.setdefault(r.code_list, {})[r.code] = r.output_code
+    if not out:
+        raise TranslationsNotFrozen(f"Snapshot {snapshot_id} has no frozen code translations (validated before they "
+                                    "were recorded): validate again (new request) before generating files")
     return out
 
 

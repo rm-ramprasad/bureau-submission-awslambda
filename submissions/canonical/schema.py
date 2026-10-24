@@ -84,6 +84,18 @@ ref_code_group = Table(
 )
 
 
+snapshot_code_translation = Table(
+    "snapshot_code_translation", metadata,
+    Column("snapshot_id", BigInteger, ForeignKey("extract_snapshot.snapshot_id", ondelete="CASCADE"),
+           primary_key=True),
+    Column("code_list", String(40), primary_key=True),
+    Column("code", String(40), primary_key=True, comment="Canonical value"),
+    Column("output_code", String(20), nullable=False),
+    comment="Active translations frozen when the snapshot was validated: the code rules and the file both use "
+            "this copy, so a file matches what was validated (kept after retention: no personal data)",
+)
+
+
 def ref_code_rows(model: CanonicalModel = MODEL) -> list[dict]:
     return [dict(code_list=cl.name, code=c.code, description=c.description, is_active=c.active)
             for cl in model.code_lists.values() for c in cl.codes]
