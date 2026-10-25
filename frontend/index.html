@@ -41,22 +41,18 @@
     <div>
       <div class="kpis">
         <a class="kpi" :href="tracker()"><span class="label">Requests raised</span>
-          <span class="value" x-text="board.raised"></span><span class="hint" x-text="typeLabel().toLowerCase() + ' validations'"></span></a>
+          <span class="value" x-text="board.raised"></span></a>
         <template x-for="st in board.stages" :key="st.value">
           <a class="kpi" :class="'k-' + st.value" :href="tracker(st.value)"><span class="label" x-text="st.label"></span>
-            <span class="value" x-text="st.count"></span><span class="hint" x-text="stageHint(st)"></span></a>
+            <span class="value" x-text="st.count"></span></a>
         </template>
       </div>
 
       <div class="kpis small">
-        <div class="kpi"><span class="label">Records validated</span><span class="value" x-text="F.num(board.records)"></span>
-          <span class="hint" x-text="F.pct(board.acceptance_rate) + ' accepted · one record = ' + recordUnit()"></span></div>
-        <div class="kpi"><span class="label" x-text="commercial() ? 'Facilities excluded' : 'Loans excluded'"></span><span class="value" x-text="F.num(board.excluded)"></span>
-          <span class="hint">by user exceptions</span></div>
-        <div class="kpi"><span class="label" x-text="commercial() ? 'Facilities overridden' : 'Loans overridden'"></span><span class="value" x-text="F.num(board.overridden)"></span>
-          <span class="hint">OD days / balance / amounts</span></div>
-        <div class="kpi"><span class="label">Files generated</span><span class="value" x-text="F.num(board.files_generated)"></span>
-          <span class="hint" x-text="F.num(board.records_submitted) + ' records submitted'"></span></div>
+        <div class="kpi"><span class="label">Records validated</span><span class="value" x-text="F.num(board.records)"></span></div>
+        <div class="kpi"><span class="label" x-text="commercial() ? 'Facilities excluded' : 'Loans excluded'"></span><span class="value" x-text="F.num(board.excluded)"></span></div>
+        <div class="kpi"><span class="label" x-text="commercial() ? 'Facilities overridden' : 'Loans overridden'"></span><span class="value" x-text="F.num(board.overridden)"></span></div>
+        <div class="kpi"><span class="label">Files generated</span><span class="value" x-text="F.num(board.files_generated)"></span></div>
       </div>
 
       <div class="grid two">

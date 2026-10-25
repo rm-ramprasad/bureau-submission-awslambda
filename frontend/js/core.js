@@ -227,8 +227,6 @@ function renderShell() {
   <div class="main">
     <header class="topbar">
       <div class="crumbs"><a href="index.html">Bureau reporting</a> <span>/</span> ${document.body.dataset.crumb || ""}</div>
-      <div class="tenant-picker" x-show="$store.app.tenant"><span class="muted">NBFC</span>
-        <strong x-text="App.tenantName()"></strong></div>
       <a class="button" href="new.html">${icon("plus")} New request</a>
     </header>
   </div>`;

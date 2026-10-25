@@ -1,8 +1,6 @@
 // Dashboard: one submission type at a time (?type=, record counts of types do not add up), request-stage KPIs, data
 // KPIs, needs attention, bureaus, NBFC status, recent requests (period filter). The type switch shows how many
 // items need attention in each type, so another type's problems stay visible.
-const RECORD_UNIT = { CONSUMER: "account × holder", COMMERCIAL: "facility × borrower" };
-
 document.addEventListener("alpine:init", () => {
   Alpine.data("dashboard", () => ({
     board: null,
@@ -26,19 +24,6 @@ document.addEventListener("alpine:init", () => {
     typeLabel() { return F.title(this.type); },
     tracker(stage) { return F.url("tracker.html", { stage, period: this.period, type: this.type }); },
     queueSlow() { return !!this.$store.app.health?.slow; },
-    commercial() { return this.type === "COMMERCIAL"; },
-    recordUnit() { return RECORD_UNIT[this.type] || "record"; },
-
-    stageHint(st) {
-      const oldest = st.count ? "oldest " + F.age(st.oldest_age) : null;
-      return {
-        AWAITING_EXCEPTIONS: oldest || "none waiting",
-        IN_PROGRESS: oldest || "nothing running",
-        VALIDATED: oldest || "none pending",
-        COMPLETED: F.pct(this.board.completion_rate) + " completion rate",
-        FAILED: st.count ? "retry or raise a new request" : "none",
-        CANCELLED: "discarded or cancelled",
-      }[st.value];
-    },
+    commercial() { return this.type === "COMMERCIAL"; }
   }));
 });
