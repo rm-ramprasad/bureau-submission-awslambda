@@ -143,7 +143,7 @@ const App = {
 
   denied(message) {
     document.body.innerHTML = `<div class="center-page"><div class="login-box"><h1>No access</h1>
-      <p>${(message || "Your account is not registered for Bureau Submissions.").replace(/</g, "&lt;")}</p>
+      <p>${(message || "Your account is not registered for Bureau Submission.").replace(/</g, "&lt;")}</p>
       <p><button onclick="Auth.signOut()">Sign out</button></p></div></div>`;
     throw new ApiError(message, 403);
   },
@@ -210,8 +210,8 @@ function renderShell() {
   shell.setAttribute("x-data", "{}");
   shell.innerHTML = `
   <aside class="sidebar">
-    <div class="brand"><span class="brand-mark">${icon("pulse")}</span>
-      <span><strong>Bureau Submissions</strong><small>Credit bureau reporting</small></span></div>
+    <div class="brand"><span class="brand-mark"><img src="logo.png" alt=""></span>
+      <span><strong>Open Terrace Analytics</strong><small>Bureau Submission</small></span></div>
     <nav>${nav}</nav>
     <div class="sidebar-foot">
       <div class="worker" :class="$store.app.health && $store.app.health.slow ? 'down' : 'ok'"

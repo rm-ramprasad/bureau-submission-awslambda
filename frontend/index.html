@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dashboard · Bureau Submissions</title>
+  <title>Dashboard · Open Terrace Analytics</title>
+  <link rel="icon" type="image/png" href="logo.png">
   <link rel="stylesheet" href="app.css">
   <script defer src="config.js"></script>
   <script defer src="vendor/oidc-client-ts.min.js"></script>
@@ -20,21 +21,20 @@
         <span x-text="$store.app.tenant ? 'for ' + $store.app.tenant : 'across all NBFCs'"></span>
         · <span x-text="periodLabel().toLowerCase()"></span>. Each request is one validation and the files generated from it.</p>
     </div>
-    <div class="head-actions">
-      <div class="segmented" x-show="board && board.types.length > 1">
-        <template x-for="t in board?.types || []" :key="t.value">
-          <a href="#" :class="t.value === type && 'on'" @click.prevent="type = t.value; load()"
-             :title="t.attention ? t.attention + ' item(s) need attention' : ''">
-            <span x-text="t.label"></span><span class="count-badge" x-show="t.attention" x-text="t.attention"></span></a>
-        </template>
-      </div>
-      <div class="segmented">
-        <template x-for="p in periods" :key="p.value">
-          <a href="#" :class="p.value === period && 'on'" @click.prevent="period = p.value; load()" x-text="p.label"></a>
-        </template>
-      </div>
+    <div class="segmented">
+      <template x-for="p in periods" :key="p.value">
+        <a href="#" :class="p.value === period && 'on'" @click.prevent="period = p.value; load()" x-text="p.label"></a>
+      </template>
     </div>
   </div>
+
+  <nav class="type-tabs" x-show="board && board.types.length > 1">
+    <template x-for="t in board?.types || []" :key="t.value">
+      <a href="#" :class="t.value === type && 'on'" @click.prevent="type = t.value; load()"
+         :title="t.attention ? t.attention + ' item(s) need attention' : ''">
+        <span x-text="t.label"></span><span class="count-badge" x-show="t.attention" x-text="t.attention"></span></a>
+    </template>
+  </nav>
 
   <p class="loading" x-show="!board">Loading…</p>
   <template x-if="board">
