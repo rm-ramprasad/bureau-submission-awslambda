@@ -28,11 +28,11 @@
       <div class="panel flush">
         <p class="loading panel-body" x-show="!drafts">Loading…</p>
         <div class="table-wrap" x-show="drafts && drafts.length"><table>
-          <thead><tr><th>Request</th><th>NBFC</th><th>As of</th><th>Types</th><th>Requested</th><th></th></tr></thead>
+          <thead><tr><th>Request</th><th>As of</th><th>Types</th><th>Requested</th><th></th></tr></thead>
           <tbody>
             <template x-for="b in drafts || []" :key="b.batch_id">
               <tr><td class="mono"><a :href="'exceptions.html?batch=' + b.batch_id" x-text="b.batch_id"></a></td>
-                <td x-text="b.tenant_id"></td><td x-text="F.d(b.as_of_date)"></td>
+                <td x-text="F.d(b.as_of_date)"></td>
                 <td x-text="b.submission_types.map(F.title).join(', ')"></td>
                 <td x-text="F.dt(b.requested_at) + ' · ' + (b.requested_by || '—')"></td>
                 <td><a class="button small" :href="'exceptions.html?batch=' + b.batch_id">Add exceptions</a></td></tr>

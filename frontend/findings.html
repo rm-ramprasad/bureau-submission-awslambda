@@ -19,7 +19,7 @@
       <div class="page-head">
         <div>
           <h1 x-text="'Findings · snapshot #' + data.snapshot.snapshot_id"></h1>
-          <p class="subtitle"><span x-text="data.snapshot.tenant_id"></span> · <span x-text="F.title(data.snapshot.submission_type)"></span>
+          <p class="subtitle"><span x-text="F.title(data.snapshot.submission_type)"></span>
             · as of <span x-text="F.d(data.snapshot.as_of_date)"></span>
             <span x-show="data.snapshot.batch_id"> · request <a class="mono" :href="'batch.html?id=' + data.snapshot.batch_id" x-text="data.snapshot.batch_id"></a></span>
             · <span class="badge" :class="'b-' + data.snapshot.status" x-text="F.title(data.snapshot.status)"></span>

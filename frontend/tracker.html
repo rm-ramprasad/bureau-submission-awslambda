@@ -52,12 +52,12 @@
         <div class="panel-head"><h2 x-text="(runs?.total ?? '…') + ' run(s)'"></h2>
           <span class="muted" x-show="runs?.pages > 1" x-text="`page ${runs?.page} of ${runs?.pages}`"></span></div>
         <div class="table-wrap" x-show="runs?.batches.length"><table>
-          <thead><tr><th>Requested</th><th>Request</th><th>NBFC</th><th>As of</th><th>Mode</th><th>Types</th><th>Bureaus</th><th>Status</th><th>By</th></tr></thead>
+          <thead><tr><th>Requested</th><th>Request</th><th>As of</th><th>Mode</th><th>Types</th><th>Bureaus</th><th>Status</th><th>By</th></tr></thead>
           <tbody>
             <template x-for="b in runs?.batches || []" :key="b.batch_id">
               <tr><td x-text="F.dt(b.requested_at)"></td>
                 <td class="mono"><a :href="'batch.html?id=' + b.batch_id" x-text="b.batch_id"></a></td>
-                <td x-text="b.tenant_id"></td><td x-text="F.d(b.as_of_date)"></td>
+                <td x-text="F.d(b.as_of_date)"></td>
                 <td x-text="b.run_mode === 'VALIDATE' ? 'Validate' : 'Generate files'"></td>
                 <td x-text="b.submission_types.map(F.title).join(', ')"></td>
                 <td x-text="b.bureau_codes.join(', ') || '—'"></td>
@@ -94,12 +94,12 @@
       </form>
       <div class="panel flush">
         <div class="table-wrap" x-show="requests?.length"><table>
-          <thead><tr><th>Request</th><th>NBFC</th><th>As of</th><th>Stage</th><th class="num">Records</th><th class="num">Accepted</th>
+          <thead><tr><th>Request</th><th>As of</th><th>Stage</th><th class="num">Records</th><th class="num">Accepted</th>
             <th class="num">Excluded</th><th>Files</th><th>Requested</th></tr></thead>
           <tbody>
             <template x-for="r in requests || []" :key="r.batch_id">
               <tr><td class="mono"><a :href="'batch.html?id=' + r.batch_id" x-text="r.batch_id"></a></td>
-                <td x-text="r.tenant_id"></td><td x-text="F.d(r.as_of_date)"></td>
+                <td x-text="F.d(r.as_of_date)"></td>
                 <td><span class="badge" :class="'s-' + r.stage" x-text="r.stage_label"></span></td>
                 <td class="num" x-text="r.records ? F.num(r.records) : ''"></td>
                 <td class="num" x-text="r.accepted ? F.num(r.accepted) : ''"></td>

@@ -70,7 +70,7 @@
             <template x-for="a in board.attention" :key="a.batch_id">
               <li :class="a.stage === 'FAILED' ? 'bad' : 'warn'">
                 <a class="mono" :href="'batch.html?id=' + a.batch_id" x-text="a.batch_id"></a>
-                · <span x-text="a.tenant_id"></span> · <span x-text="F.d(a.as_of_date)"></span><div x-text="a.reason"></div></li>
+                · <span x-text="F.d(a.as_of_date)"></span><div x-text="a.reason"></div></li>
             </template>
           </ul>
           <div class="panel-body muted" x-show="!board.attention.length && !queueSlow()">Nothing needs attention.</div>
@@ -113,11 +113,11 @@
       <div class="panel flush">
         <div class="panel-head"><h2>Recent <span x-text="typeLabel().toLowerCase()"></span> requests</h2><a :href="tracker()">All in the tracker</a></div>
         <div class="table-wrap" x-show="board.recent.length"><table>
-          <thead><tr><th>Request</th><th>NBFC</th><th>As of</th><th>Stage</th><th class="num">Records</th><th class="num">Excluded</th><th>Files</th><th>Requested</th></tr></thead>
+          <thead><tr><th>Request</th><th>As of</th><th>Stage</th><th class="num">Records</th><th class="num">Excluded</th><th>Files</th><th>Requested</th></tr></thead>
           <tbody>
             <template x-for="r in board.recent" :key="r.batch_id">
               <tr><td class="mono"><a :href="'batch.html?id=' + r.batch_id" x-text="r.batch_id"></a></td>
-                <td x-text="r.tenant_id"></td><td x-text="F.d(r.as_of_date)"></td>
+                <td x-text="F.d(r.as_of_date)"></td>
                 <td><span class="badge" :class="'s-' + r.stage" x-text="r.stage_label"></span></td>
                 <td class="num" x-text="r.records ? F.num(r.records) : ''"></td><td class="num" x-text="r.excluded || ''"></td>
                 <td x-text="r.files.join(', ') || '—'"></td>
