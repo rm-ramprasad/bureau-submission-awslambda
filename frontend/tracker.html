@@ -15,7 +15,7 @@
 <main class="content" x-data="tracker">
   <div class="page-head">
     <div>
-      <h1>Submission tracker<span x-show="view === 'requests' && stageLabel()" x-text="' · ' + stageLabel()"></span></h1>
+      <h1>Submission tracker<span x-show="view === 'requests' && type" x-text="' · ' + F.title(type)"></span><span x-show="view === 'requests' && stageLabel()" x-text="' · ' + stageLabel()"></span></h1>
       <p class="subtitle" x-show="view === 'runs'">Validation runs and generated files
         <span x-text="$store.app.tenant ? 'for ' + $store.app.tenant : 'across all NBFCs'"></span>.</p>
       <p class="subtitle" x-show="view === 'requests'">Each request is one validation and the files generated from it

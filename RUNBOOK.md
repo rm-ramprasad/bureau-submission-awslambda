@@ -108,21 +108,18 @@ aws lambda invoke --function-name $fn --cli-binary-format raw-in-base64-out `
 
 Only the e-mail from the **newest** invite works; each resend replaces the temporary password.
 
-## Scheduled runs
+## Scheduled jobs
 
-EventBridge Scheduler runs the `JobsFunction` (India time):
+EventBridge Scheduler runs the `JobsFunction` (India time) for housekeeping only:
 
 | When | Job |
 |---|---|
 | Every 15 minutes | `recovery`: frees runs whose Lambda died, re-starts PENDING runs that waited more than 10 minutes |
 | Daily 02:00 | `retention` (90 days): purges snapshot rows, findings and files; summaries are kept |
-| 2nd of the month, 06:00 | `schedule ME`: validation run for the deployment's NBFC (as of last month-end) |
-| 10th / 17th / 24th, 06:00 | `schedule W1` / `W2` / `W3` |
-
-Scheduled runs are always **validations**: the team reviews findings, then generates files in the app.
+There are **no scheduled validation runs**: users raise every request (ME, W1, W2, W3, ad hoc ...) themselves on
+the New request page, review the findings, then generate the files.
 
 Run a job by hand: `aws lambda invoke --function-name $fn --cli-binary-format raw-in-base64-out --payload '<json>' out.json`, with
-- `{"job":"schedule","cycle":"ME","as_of":"2026-09-30","tenants":["nbfc_001"]}`
 - `{"job":"retention","days":90,"dry_run":true}`
 - `{"job":"recovery"}`
 - `{"job":"migrate"}`: pending migrations, then the missing reference rows, then any placeholder bureau profiles the
@@ -159,7 +156,7 @@ The **Audit** page (table `audit_event`) records:
 - sign-ins (`LOGIN`, `LOGOUT`, `LOGIN_DENIED`);
 - requests, exceptions, confirmations, downloads and CSV exports;
 - rule and parameter changes, with reasons;
-- scheduled runs, recovery and purges;
+- recovery and purges;
 - user administration (`USER_ADDED`, `USER_DISABLED`, …; actor `admin-lambda`).
 
 ## Local development

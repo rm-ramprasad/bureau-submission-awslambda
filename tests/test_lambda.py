@@ -121,13 +121,6 @@ def jobs_env(engine, monkeypatch, tmp_path):
     return sent
 
 
-def test_jobs_schedule_creates_and_dispatches_validations(jobs_env, requests_repo):
-    result = L.jobs({"job": "schedule", "cycle": "ME", "as_of": "2026-09-30"}, None)
-    assert set(result["created"]) == {"nbfc_001"}                  # only the deployment's NBFC, not nbfc_002
-    assert len(jobs_env) == 2                                       # consumer and commercial
-    assert L.jobs({"job": "schedule", "cycle": "ME", "as_of": "2026-09-30"}, None)["created"] == {}   # no duplicates
-
-
 def test_jobs_recovery_redispatches_requests_that_were_never_picked_up(jobs_env, requests_repo, clock):
     v = requests_repo.create_batch("nbfc_001", AS_OF, M.VALIDATE, [T.CONSUMER])   # requested at the fake clock
     result = L.jobs({"job": "recovery"}, None)

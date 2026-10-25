@@ -2,7 +2,7 @@
 
   api       API Gateway HTTP API (payload 2.0) -> the Flask JSON API
   worker    S3 "job object created" event -> run that one request (validate or generate worker function)
-  jobs      EventBridge Scheduler / `aws lambda invoke` -> schedule | recovery | retention | migrate | users
+  jobs      EventBridge Scheduler / `aws lambda invoke` -> recovery | retention | migrate | users
 
 Clients and engines are created once per execution environment and reused while it stays warm.
 """
@@ -111,20 +111,6 @@ def _recovery() -> dict:
             "redispatched": [r.request_id for r in stale]}
 
 
-def _schedule(event) -> dict:
-    from datetime import date
-    from submissions.dispatch import dispatch_batch, make_dispatcher
-    from submissions.ops.schedule import schedule_runs
-    from submissions.requests import RequestRepository
-    result = schedule_runs(engine(), event["cycle"],
-                           as_of=date.fromisoformat(event["as_of"]) if event.get("as_of") else None,
-                           tenant_ids=[settings().tenant] if settings().tenant else None)   # this deployment's NBFC
-    dispatcher, requests = make_dispatcher(settings()), RequestRepository(engine())
-    for batch_id in result.created.values():
-        dispatch_batch(dispatcher, requests, batch_id)
-    return {"created": result.created, "skipped": result.skipped}
-
-
 def _retention(event) -> dict:
     from submissions.ops.retention import purge
     from submissions.storage import make_store
@@ -151,8 +137,6 @@ def jobs(event, context):
     log.info("Job %s", job)
     if job == "recovery":
         return _recovery()
-    if job == "schedule":
-        return _schedule(event)
     if job == "retention":
         return _retention(event)
     if job == "migrate":
@@ -167,4 +151,4 @@ def jobs(event, context):
         return result
     if job == "users":
         return _users(event)
-    raise ValueError(f"Unknown job {job!r}: use schedule, recovery, retention, migrate or users")
+    raise ValueError(f"Unknown job {job!r}: use recovery, retention, migrate or users")

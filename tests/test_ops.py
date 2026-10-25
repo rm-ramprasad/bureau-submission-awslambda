@@ -10,7 +10,6 @@ from submissions.enums import ReportingCycle as C, RequestStatus as S, RunMode a
 from submissions.ops import audit
 from submissions.ops.recovery import RecoverySettings, recover
 from submissions.ops.retention import purge
-from submissions.ops.schedule import default_as_of, schedule_runs
 from submissions.pipeline import Services
 from submissions.storage import LocalFileStore
 from submissions.snapshot import SnapshotRepository
@@ -145,38 +144,3 @@ def test_generate_from_purged_snapshot_is_refused(worker, engine, requests_repo,
 
 
 # ---------------------------------------------------------------- scheduling
-@pytest.mark.parametrize("cycle,today,expected", [
-    (C.MONTH_END, date(2026, 10, 21), date(2026, 9, 30)),
-    (C.MONTH_END, date(2026, 3, 1), date(2026, 2, 28)),
-    (C.WEEKLY_1, date(2026, 10, 21), date(2026, 10, 9)),
-    (C.WEEKLY_3, date(2026, 10, 21), date(2026, 9, 23)),       # 23rd not reached yet this month
-    (C.WEEKLY_2, date(2026, 10, 16), date(2026, 10, 16)),
-    (C.DAILY, date(2026, 10, 21), date(2026, 10, 20)),
-])
-def test_default_as_of(cycle, today, expected):
-    assert default_as_of(cycle, today) == expected
-
-
-def test_default_as_of_needs_explicit_date_for_adhoc():
-    with pytest.raises(ValueError):
-        default_as_of(C.AD_HOC, date(2026, 10, 21))
-
-
-def test_schedule_validate_for_all_active_tenants(engine, requests_repo, tenant_repo):
-    result = schedule_runs(engine, "ME", today=date(2026, 10, 21))
-    assert set(result.created) == {"nbfc_001", "nbfc_002"} and result.skipped == {}
-    rows = requests_repo.list_batch(result.created["nbfc_001"])
-    assert {(r.submission_type, r.as_of_date, r.reporting_cycle.value, r.requested_by, r.run_mode) for r in rows} == {
-        (T.CONSUMER, AS_OF, "ME", "scheduler", M.VALIDATE), (T.COMMERCIAL, AS_OF, "ME", "scheduler", M.VALIDATE)}
-    again = schedule_runs(engine, "ME", today=date(2026, 10, 21))     # still pending -> skipped, not duplicated
-    assert again.created == {} and "Already open" in again.skipped["nbfc_001"]
-    tenant_repo.set_active("nbfc_002", False)
-    assert "nbfc_002" not in schedule_runs(engine, "W1", today=date(2026, 10, 21)).created
-
-
-def test_scheduler_only_validates():
-    import inspect as pyinspect
-    from submissions.ops import schedule
-    assert "mode" not in pyinspect.signature(schedule.schedule_runs).parameters
-    with pytest.raises(SystemExit):                                     # --mode no longer exists
-        schedule.main(["--cycle", "ME", "--mode", "GENERATE"])

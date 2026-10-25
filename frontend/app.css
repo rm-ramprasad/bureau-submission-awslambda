@@ -137,6 +137,8 @@ tr.expected td { color: var(--muted); }
 .segmented a:first-child { border-left: 0; }
 .segmented a.on { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
 .segmented a:hover { text-decoration: none; background: var(--soft); }
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+.count-badge { display: inline-block; min-width: 18px; margin-left: 6px; padding: 0 5px; border-radius: 9px; background: var(--bad); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .kpi { display: flex; flex-direction: column; gap: 2px; background: var(--panel); border: 1px solid var(--line);
   border-radius: var(--radius); padding: 14px 16px; color: var(--text); border-top: 3px solid var(--line); }

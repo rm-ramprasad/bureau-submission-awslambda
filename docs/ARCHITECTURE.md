@@ -36,9 +36,9 @@
 | 9 | Onboarding | A mapping file per NBFC (base LMS mapping + overrides + lookups), compiled to MySQL. |
 | 10 | Snapshot | Each validation extracts into canonical snapshot tables; validation and formatting read the same frozen data. |
 | 11 | Validation | A separate stage. SQL-first rules over canonical tables, Python only for algorithmic rules, findings in tables. Custom per-NBFC rules and policy overrides. |
-| 12 | Tenancy | One NBFC per deployment (own AWS account per customer). Isolation by schema at extract; everything after carries `tenant_id` / `snapshot_id`. The API applies the deployment's tenant to every call and refuses other tenants' requests and snapshots; scheduled runs cover only it. |
+| 12 | Tenancy | One NBFC per deployment (own AWS account per customer). Isolation by schema at extract; everything after carries `tenant_id` / `snapshot_id`. The API applies the deployment's tenant to every call and refuses other tenants' requests and snapshots. |
 | 13 | Exceptions | Exclusions and overrides are joined into the extract in SQL (`NOT EXISTS`, `COALESCE(override, source)`), frozen per snapshot, and confirmed before generating. The LMS schema must be on the app's MySQL server: the app tables live on the customer's LMS RDS instance. |
-| 14 | Validate first, always | No direct file generation. New requests and scheduled runs are validations; files come only from a validated snapshot. |
+| 14 | Validate first, always | No direct file generation. Every request is raised by a user and is a validation; files come only from a validated snapshot. |
 | 15 | Request flow | Request → Exceptions → Validation → Files (§5). Exceptions are locked on submit; more exceptions means a new request. |
 | 16 | File storage | Generated files and exception CSVs go to S3 (`s3://<bucket>/<prefix>/<tenant>/<batch>/<file>`), written conditionally (never overwritten), SSE encrypted. Downloads use short-lived presigned links. |
 | 17 | Hosting | Serverless on AWS (§3): static frontend, Cognito sign-in, HTTP API + Lambda, worker Lambdas started by S3 job objects, EventBridge Scheduler. No servers to patch. |
@@ -56,7 +56,7 @@
                                                                                               ▼                   ▼
                                                                                       λ ValidateWorker    λ GenerateWorker
                                                                                       extract → validate  format → S3 file
- EventBridge Scheduler ──▶ λ JobsFunction (schedule · retention · recovery/re-dispatch · migrate · users)
+ EventBridge Scheduler ──▶ λ JobsFunction (retention · recovery/re-dispatch · migrate · users)
 
  RDS VPC subnets (no NAT): all λ ── RDS MySQL (3306, security group to security group)
                                  └─ S3 gateway endpoint (free) → files bucket + jobs bucket
@@ -97,7 +97,7 @@
 | `submissions/types/<type>/` | One folder per submission type: codes, requirements, rules, layout, pipeline |
 | `submissions/reference.py` | Reference data seed (insert-missing) and the translations files use |
 | `submissions/worker/` | Runs one request (Lambda) or polls for PENDING rows (local development) |
-| `submissions/ops/` | Audit, recovery, retention, scheduled runs |
+| `submissions/ops/` | Audit, recovery, retention |
 | `submissions/onboarding/` | `new_tenant`, `introspect`, `dry_run` ([ONBOARDING.md](../ONBOARDING.md)) |
 | `clients/` | Base and per-NBFC mappings, generated SQL |
 | `migrations/` | Numbered SQL migrations (MySQL) |

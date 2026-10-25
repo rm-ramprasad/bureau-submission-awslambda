@@ -78,6 +78,45 @@ def test_dashboard_counts_requests_not_rows(engine, worker, requests_repo, clock
     assert [r.tenant_id for r in load_requests(engine, "nbfc_002")] == ["nbfc_002"]
 
 
+def test_one_request_has_a_stage_per_type(engine, worker, requests_repo, tenant_repo, clock, tmp_path):
+    """Consumer validated and filed, commercial failed in the same request: each type shows its own stage."""
+    v = requests_repo.create_batch("nbfc_001", AS_OF, M.VALIDATE, [T.CONSUMER, T.COMMERCIAL])
+    worker.run_once()
+    rows = {r.submission_type: r for r in requests_repo.list_batch(v)}
+    requests_repo.create_batch("nbfc_001", AS_OF, M.GENERATE, [T.CONSUMER], [B.CIBIL],
+                               snapshot_id=rows[T.CONSUMER].snapshot_id)
+    worker.run_once()
+    with engine.begin() as conn:                                        # the commercial validation failed
+        from submissions.requests.tables import submission_request as t
+        conn.execute(t.update().where(t.c.request_id == rows[T.COMMERCIAL].request_id)
+                     .values(status="FAILED", error_message="Snapshot build failed: party: no table"))
+    now = clock()
+    consumer = build_dashboard(engine, "nbfc_001", Period.ALL, now, T.CONSUMER)
+    commercial = build_dashboard(engine, "nbfc_001", Period.ALL, now, T.COMMERCIAL)
+    assert (consumer.count(Stage.COMPLETED), consumer.count(Stage.FAILED), consumer.total("records")) == (1, 0, 56)
+    assert (commercial.count(Stage.COMPLETED), commercial.count(Stage.FAILED), commercial.total("records")) == (0, 1, 0)
+    assert commercial.attention[0].reason.startswith("Failed: Snapshot build failed") and not consumer.attention
+    assert commercial.files_generated == 0 and consumer.files_generated == 1
+
+
+def test_dashboard_api_switches_type(make_api, worker, requests_repo):
+    api = make_api()
+    requests_repo.create_batch("nbfc_001", AS_OF, M.VALIDATE, [T.COMMERCIAL])
+    worker.run_once()
+    requests_repo.create_batch("nbfc_001", AS_OF, M.VALIDATE, [T.CONSUMER], draft=True)
+    _, consumer = api.get("/dashboard", period="all", tenant="nbfc_001")
+    assert consumer["type"] == "CONSUMER" and consumer["raised"] == 1                 # default: the first type
+    assert [t["value"] for t in consumer["types"]] == ["CONSUMER", "COMMERCIAL"]
+    _, commercial = api.get("/dashboard", period="all", tenant="nbfc_001", type="COMMERCIAL")
+    assert commercial["type"] == "COMMERCIAL" and commercial["records"] == 18
+    assert {s["value"]: s["count"] for s in commercial["stages"]}["VALIDATED"] == 1
+    assert "scheduled" not in commercial
+    _, tracker = api.get("/batches", stage="VALIDATED", period="all", type="COMMERCIAL")
+    assert len(tracker["requests"]) == 1
+    assert api.get("/batches", stage="VALIDATED", period="all", type="CONSUMER")[1]["requests"] == []
+    assert api.get("/dashboard", type="NOPE")[0] == 400
+
+
 def test_dashboard_api_and_click_through(make_api, worker, requests_repo):
     api = make_api()
     v = requests_repo.create_batch("nbfc_001", AS_OF, M.VALIDATE, [T.CONSUMER])

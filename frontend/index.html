@@ -16,13 +16,23 @@
   <div class="page-head">
     <div>
       <h1>Dashboard</h1>
-      <p class="subtitle">Requests <span x-text="$store.app.tenant ? 'for ' + $store.app.tenant : 'across all NBFCs'"></span>
+      <p class="subtitle"><span x-text="typeLabel()"></span> requests
+        <span x-text="$store.app.tenant ? 'for ' + $store.app.tenant : 'across all NBFCs'"></span>
         · <span x-text="periodLabel().toLowerCase()"></span>. Each request is one validation and the files generated from it.</p>
     </div>
-    <div class="segmented">
-      <template x-for="p in periods" :key="p.value">
-        <a href="#" :class="p.value === period && 'on'" @click.prevent="period = p.value; load()" x-text="p.label"></a>
-      </template>
+    <div class="head-actions">
+      <div class="segmented" x-show="board && board.types.length > 1">
+        <template x-for="t in board?.types || []" :key="t.value">
+          <a href="#" :class="t.value === type && 'on'" @click.prevent="type = t.value; load()"
+             :title="t.attention ? t.attention + ' item(s) need attention' : ''">
+            <span x-text="t.label"></span><span class="count-badge" x-show="t.attention" x-text="t.attention"></span></a>
+        </template>
+      </div>
+      <div class="segmented">
+        <template x-for="p in periods" :key="p.value">
+          <a href="#" :class="p.value === period && 'on'" @click.prevent="period = p.value; load()" x-text="p.label"></a>
+        </template>
+      </div>
     </div>
   </div>
 
@@ -31,7 +41,7 @@
     <div>
       <div class="kpis">
         <a class="kpi" :href="tracker()"><span class="label">Requests raised</span>
-          <span class="value" x-text="board.raised"></span><span class="hint" x-text="board.scheduled + ' scheduled'"></span></a>
+          <span class="value" x-text="board.raised"></span><span class="hint" x-text="typeLabel().toLowerCase() + ' validations'"></span></a>
         <template x-for="st in board.stages" :key="st.value">
           <a class="kpi" :class="'k-' + st.value" :href="tracker(st.value)"><span class="label" x-text="st.label"></span>
             <span class="value" x-text="st.count"></span><span class="hint" x-text="stageHint(st)"></span></a>
@@ -40,10 +50,10 @@
 
       <div class="kpis small">
         <div class="kpi"><span class="label">Records validated</span><span class="value" x-text="F.num(board.records)"></span>
-          <span class="hint" x-text="F.pct(board.acceptance_rate) + ' accepted'"></span></div>
-        <div class="kpi"><span class="label">Loans excluded</span><span class="value" x-text="F.num(board.excluded)"></span>
+          <span class="hint" x-text="F.pct(board.acceptance_rate) + ' accepted · one record = ' + recordUnit()"></span></div>
+        <div class="kpi"><span class="label" x-text="commercial() ? 'Facilities excluded' : 'Loans excluded'"></span><span class="value" x-text="F.num(board.excluded)"></span>
           <span class="hint">by user exceptions</span></div>
-        <div class="kpi"><span class="label">Loans overridden</span><span class="value" x-text="F.num(board.overridden)"></span>
+        <div class="kpi"><span class="label" x-text="commercial() ? 'Facilities overridden' : 'Loans overridden'"></span><span class="value" x-text="F.num(board.overridden)"></span>
           <span class="hint">OD days / balance / amounts</span></div>
         <div class="kpi"><span class="label">Files generated</span><span class="value" x-text="F.num(board.files_generated)"></span>
           <span class="hint" x-text="F.num(board.records_submitted) + ' records submitted'"></span></div>
@@ -51,7 +61,7 @@
 
       <div class="grid two">
         <div class="panel flush">
-          <div class="panel-head"><h2>Needs attention</h2>
+          <div class="panel-head"><h2>Needs attention <span class="muted" x-text="'· ' + typeLabel()"></span></h2>
             <span class="muted" x-text="board.attention.length + (queueSlow() ? 1 : 0)"></span></div>
           <ul class="attention" x-show="board.attention.length || queueSlow()">
             <li class="bad" x-show="queueSlow()"><strong>Runs are waiting.</strong> The oldest submitted request has waited
@@ -67,7 +77,7 @@
         </div>
 
         <div class="panel flush">
-          <div class="panel-head"><h2>Bureaus</h2><span class="muted">files in the period</span></div>
+          <div class="panel-head"><h2>Bureaus</h2><span class="muted" x-text="typeLabel().toLowerCase() + ' files in the period'"></span></div>
           <div class="panel-body" x-show="board.bureaus.length">
             <template x-for="b in board.bureaus" :key="b.bureau">
               <div class="meter-row"><div class="meter-label"><strong x-text="F.title(b.bureau)"></strong>
@@ -101,7 +111,7 @@
       </div>
 
       <div class="panel flush">
-        <div class="panel-head"><h2>Recent requests</h2><a :href="tracker()">All in the tracker</a></div>
+        <div class="panel-head"><h2>Recent <span x-text="typeLabel().toLowerCase()"></span> requests</h2><a :href="tracker()">All in the tracker</a></div>
         <div class="table-wrap" x-show="board.recent.length"><table>
           <thead><tr><th>Request</th><th>NBFC</th><th>As of</th><th>Stage</th><th class="num">Records</th><th class="num">Excluded</th><th>Files</th><th>Requested</th></tr></thead>
           <tbody>

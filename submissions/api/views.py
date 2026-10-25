@@ -110,7 +110,7 @@ def request_json(r: stages.Request, now: datetime) -> dict:
             "submission_types": [x.submission_type for x in r.rows], "stage": r.stage, "stage_label": r.stage.label,
             "records": r.records, "accepted": r.accepted, "excluded": r.excluded, "overridden": r.overridden,
             "files": [f.bureau_code for f in r.files_done], "requested_by": r.first.requested_by,
-            "created_at": r.created_at, "last_activity": r.last_activity, "scheduled": r.scheduled,
+            "created_at": r.created_at, "last_activity": r.last_activity,
             "age_seconds": r.age(now)}
 
 
@@ -189,11 +189,29 @@ def _period() -> Period:
         return Period.THIS_MONTH
 
 
+def _offered_types() -> list[SubmissionType]:
+    """Types the selected NBFC can run (its mapping files), or every enabled type across all NBFCs."""
+    s = svc()
+    return available_types(s.tenants.get(s.tenant)) if s.tenant else enabled_types()
+
+
+def _dashboard_type() -> SubmissionType:
+    """The dashboard's submission type (?type=): one type at a time, record counts of types do not add up."""
+    offered = _offered_types()
+    try:
+        chosen = SubmissionType(request.args.get("type")) if request.args.get("type") else None
+    except ValueError:
+        fail("Unknown submission type")
+    return chosen if chosen in offered else (offered[0] if offered else SubmissionType.CONSUMER)
+
+
 @bp.get("/dashboard")
 def dashboard():
     s, now = svc(), utcnow()
-    period, tenant_id = _period(), selected_tenant()
-    board = stages.build_dashboard(s.engine, tenant_id, period, now)
+    period, tenant_id, sub_type = _period(), selected_tenant(), _dashboard_type()
+    board = stages.build_dashboard(s.engine, tenant_id, period, now, sub_type)
+    types = [{"value": t, "label": t.value.title(), "attention": len(board.attention) if t is sub_type else len(
+              stages.build_dashboard(s.engine, tenant_id, period, now, t).attention)} for t in _offered_types()]
     nbfc_status = None
     if not tenant_id:                                    # all NBFCs: who has (not) submitted
         active = s.tenants.list()
@@ -202,7 +220,7 @@ def dashboard():
                         "latest": request_json(latest[x.tenant_id], now) if x.tenant_id in latest else None}
                        for x in active]
     return jsonify(
-        period=period, raised=board.raised, scheduled=board.scheduled,
+        period=period, type=sub_type, types=types, raised=board.raised,
         stages=[{"value": st, "label": st.label, "count": board.count(st), "oldest_age": board.oldest_age(st)}
                 for st in Stage],
         completion_rate=board.completion_rate, acceptance_rate=board.acceptance_rate,
@@ -224,7 +242,11 @@ def batches():
         except ValueError:
             fail(f"Unknown stage {stage_arg}")
         now = utcnow()
-        reqs = stages.load_requests(s.engine, tenant_id, _period().start(now))
+        try:
+            sub_type = SubmissionType(request.args["type"]) if request.args.get("type") else None
+        except ValueError:
+            fail("Unknown submission type")
+        reqs = stages.load_requests(s.engine, tenant_id, _period().start(now), sub_type)
         if stage:
             reqs = [r for r in reqs if r.stage is stage]
         return jsonify(view="requests", requests=[request_json(r, now) for r in reqs])

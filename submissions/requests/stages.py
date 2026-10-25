@@ -14,7 +14,7 @@ from enum import StrEnum
 
 from sqlalchemy import Engine, select
 
-from submissions.enums import BureauCode, RequestStatus as S, RunMode
+from submissions.enums import BureauCode, RequestStatus as S, RunMode, SubmissionType
 from submissions.requests.models import SubmissionRequest
 from submissions.requests.tables import submission_request as t
 
@@ -119,19 +119,21 @@ class Request:
     def files_done(self) -> list[SubmissionRequest]:
         return [f for f in self.files if f.status is S.SUCCEEDED]
 
-    @property
-    def scheduled(self) -> bool:
-        return self.first.requested_by == "scheduler"
-
     def age(self, now: datetime) -> timedelta:
         return now - self.created_at
 
 
-def load_requests(engine: Engine, tenant_id: str | None = None, since: datetime | None = None) -> list[Request]:
-    """Requests (validation batches) newest first, each with the file generations made from its snapshots."""
+def load_requests(engine: Engine, tenant_id: str | None = None, since: datetime | None = None,
+                  submission_type: SubmissionType | str | None = None) -> list[Request]:
+    """Requests (validation batches) newest first, each with the file generations made from its snapshots.
+
+    With `submission_type`, only that type's rows count: a batch validating consumer and commercial appears with the
+    stage and figures of that type alone (its files come from that type's snapshot), or not at all if it has none."""
     q = select(t)
     if tenant_id:
         q = q.where(t.c.tenant_id == tenant_id)
+    if submission_type:
+        q = q.where(t.c.submission_type == str(SubmissionType(submission_type)))
     with engine.connect() as conn:
         rows = [SubmissionRequest.from_row(r) for r in conn.execute(q.order_by(t.c.request_id))]
     by_batch: dict[str, list[SubmissionRequest]] = defaultdict(list)
@@ -174,10 +176,6 @@ class Dashboard:
     @property
     def raised(self) -> int:
         return len(self.requests)
-
-    @property
-    def scheduled(self) -> int:
-        return sum(r.scheduled for r in self.requests)
 
     @property
     def completion_rate(self) -> float | None:
@@ -236,8 +234,10 @@ def _bureaus(requests: list[Request]) -> list[dict]:
     return sorted(stats.values(), key=lambda s: s["records"], reverse=True)
 
 
-def build_dashboard(engine: Engine, tenant_id: str | None, period: Period, now: datetime) -> Dashboard:
-    requests = load_requests(engine, tenant_id, period.start(now))
+def build_dashboard(engine: Engine, tenant_id: str | None, period: Period, now: datetime,
+                    submission_type: SubmissionType | str | None = None) -> Dashboard:
+    """The dashboard of one submission type (record counts of different types do not add up)."""
+    requests = load_requests(engine, tenant_id, period.start(now), submission_type)
     by_stage: dict[Stage, list[Request]] = defaultdict(list)
     for r in requests:
         by_stage[r.stage].append(r)

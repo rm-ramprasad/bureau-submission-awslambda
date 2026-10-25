@@ -65,8 +65,8 @@ Migration/table parity against real MySQL: set `SUBMISSIONS_TEST_MYSQL_URL` to a
 - **Tenancy:** isolation by schema at extract; everything after carries `tenant_id` / `snapshot_id` and must be scoped by it.
 - **One NBFC per deployment:** each customer gets their own AWS account with their LMS on RDS; the same `bureau-submissions`
   stack is deployed alongside it, with the app tables on that same RDS server. `SUBMISSIONS_TENANT` (stack parameter
-  `Tenant`) names the NBFC; the API applies it to every call and refuses other tenants' requests/snapshots, and scheduled
-  runs cover only it. There is no NBFC selector. `Settings.tenant = None` (all NBFCs) exists only for tests. The mock
+  `Tenant`) names the NBFC; the API applies it to every call and refuses other tenants' requests/snapshots. Users raise
+  every request themselves (no scheduled validation runs). There is no NBFC selector. `Settings.tenant = None` (all NBFCs) exists only for tests. The mock
   `nbfc_002` (customised layout) stays as a second configuration to test mapping overrides.
 - **Findings report:** rules are grouped into business categories (`results.CATEGORIES`, from the rule ID's segment or
   the pack's `category:`) with plain-language effects; counts are records (loan × borrower), not findings. A pack rule

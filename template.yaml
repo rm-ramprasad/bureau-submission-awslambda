@@ -401,30 +401,7 @@ Resources:
             ScheduleExpression: cron(0 2 * * ? *)
             ScheduleExpressionTimezone: Asia/Kolkata
             Input: !Sub '{"job": "retention", "days": ${RetentionDays}}'
-        MonthEnd:
-          Type: ScheduleV2
-          Properties:
-            ScheduleExpression: cron(0 6 2 * ? *)
-            ScheduleExpressionTimezone: Asia/Kolkata
-            Input: '{"job": "schedule", "cycle": "ME"}'
-        Weekly1:
-          Type: ScheduleV2
-          Properties:
-            ScheduleExpression: cron(0 6 10 * ? *)
-            ScheduleExpressionTimezone: Asia/Kolkata
-            Input: '{"job": "schedule", "cycle": "W1"}'
-        Weekly2:
-          Type: ScheduleV2
-          Properties:
-            ScheduleExpression: cron(0 6 17 * ? *)
-            ScheduleExpressionTimezone: Asia/Kolkata
-            Input: '{"job": "schedule", "cycle": "W2"}'
-        Weekly3:
-          Type: ScheduleV2
-          Properties:
-            ScheduleExpression: cron(0 6 24 * ? *)
-            ScheduleExpressionTimezone: Asia/Kolkata
-            Input: '{"job": "schedule", "cycle": "W3"}'
+        # No scheduled validation runs: users raise every request (ME, W1, W2, W3 ...) themselves.
 
   ApiLogs:
     Type: AWS::Logs::LogGroup
