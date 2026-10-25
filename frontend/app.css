@@ -214,3 +214,46 @@ body.login-page { display: grid; place-items: center; min-height: 100vh; }
 .stack.narrow input[type=password] { width: 100%; box-sizing: border-box; }
 input[type=password] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
 .user-actions { margin-top: 8px; font-size: 12.5px; display: flex; gap: 12px; }
+
+/* ---------- How to page */
+.howto h2 { font-size: 17px; margin: 0 0 14px; }
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 28px; }
+.flow li { position: relative; display: flex; }
+.flow li + li::before { content: "→"; position: absolute; left: -22px; top: 50%; transform: translateY(-50%); color: var(--accent);
+  font-size: 18px; font-weight: 700; }
+.flow-step { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 16px 14px; border: 1px solid var(--line);
+  border-top: 3px solid var(--accent); border-radius: var(--radius); background: var(--panel); color: var(--text); }
+a.flow-step:hover { text-decoration: none; border-color: var(--accent); box-shadow: 0 2px 10px rgba(79, 70, 229, .12); }
+.flow-step strong { font-size: 14.5px; }
+.flow-step span:not(.flow-no) { color: var(--muted); font-size: 13px; flex: 1; }
+.flow-step em { font-style: normal; font-size: 12px; color: var(--accent-text); font-weight: 600; }
+.flow-step.outside { border-style: dashed; border-top-style: solid; border-top-color: #9aa1ad; background: var(--soft); }
+.flow-no { width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; display: inline-grid;
+  place-items: center; font-size: 13px; font-weight: 700; flex: none; }
+.flow-step.outside .flow-no { background: #9aa1ad; }
+.flow-loop { margin: 18px 0 0; padding: 12px 16px; border-radius: 10px; background: var(--warn-bg); color: var(--text); }
+.flow-loop span { color: var(--warn); font-weight: 700; margin-right: 4px; }
+.howto-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px 28px; }
+.howto-steps h3 { display: flex; align-items: center; gap: 10px; font-size: 15px; margin: 0 0 6px; }
+.howto-steps ul, .howto-admin ul { margin: 0; padding-left: 20px; } .howto-steps li, .howto-admin li { margin-bottom: 4px; }
+.howto-table td { border-bottom: 1px solid var(--line); background: none; } .howto-table td:first-child { white-space: nowrap; }
+.outcomes { display: grid; gap: 10px; }
+.outcome { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 10px; border-left: 4px solid; }
+.outcome span { font-size: 13px; } .outcome em { font-style: normal; font-size: 12.5px; font-weight: 600; }
+.outcome.bad { background: var(--bad-bg); border-color: var(--bad); } .outcome.bad em { color: var(--bad); }
+.outcome.warn { background: var(--warn-bg); border-color: var(--warn); } .outcome.warn em { color: var(--warn); }
+.outcome.info { background: var(--soft); border-color: #9aa1ad; } .outcome.info em { color: var(--muted); }
+.glossary { display: grid; grid-template-columns: max-content 1fr; gap: 8px 24px; margin: 0; }
+.glossary dt { font-weight: 600; } .glossary dd { margin: 0; color: var(--muted); }
+.howto-admin summary { cursor: pointer; list-style: none; } .howto-admin summary h2 { display: inline; margin: 0; }
+.howto-admin summary::before { content: "▸ "; color: var(--muted); } .howto-admin[open] summary::before { content: "▾ "; }
+.howto-admin[open] summary { margin-bottom: 12px; }
+@media (max-width: 1100px) {
+  .flow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .flow li:nth-child(4)::before { display: none; }
+}
+@media (max-width: 640px) {
+  .flow { grid-template-columns: 1fr; gap: 26px; }
+  .flow li + li::before { content: "↓"; left: 50%; top: -22px; transform: translateX(-50%); display: block; }
+  .glossary { grid-template-columns: 1fr; } .glossary dd { margin-bottom: 6px; }
+}

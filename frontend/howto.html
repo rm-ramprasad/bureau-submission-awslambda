@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How to · Open Terrace Analytics</title>
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="stylesheet" href="app.css">
+  <script defer src="config.js"></script>
+  <script defer src="vendor/oidc-client-ts.min.js"></script>
+  <script defer src="js/core.js"></script>
+  <script defer src="vendor/alpine.min.js"></script>
+</head>
+<body data-nav="howto" data-crumb="How to">
+<main class="content howto">
+  <div class="page-head">
+    <div>
+      <h1>How to submit to the credit bureaus</h1>
+      <p class="subtitle">Six steps from your loan data to the bureau files. Consumer and Commercial follow the same steps;
+        each is checked against its own bureau format.</p>
+    </div>
+  </div>
+
+  <!-- ===================== the flow -->
+  <div class="panel">
+    <h2>The flow at a glance</h2>
+    <ol class="flow">
+      <li><a class="flow-step" href="new.html"><span class="flow-no">1</span><strong>New request</strong>
+        <span>Choose the as-of date, the reporting cycle and Consumer and/or Commercial.</span>
+        <em>You · 1 minute</em></a></li>
+      <li><a class="flow-step" href="exceptions.html"><span class="flow-no">2</span><strong>Exceptions</strong>
+        <span>Leave out a loan or customer, or correct a value, with a reason. Optional.</span>
+        <em>You · as needed</em></a></li>
+      <li><div class="flow-step"><span class="flow-no">3</span><strong>Validate</strong>
+        <span>Submit the request. The system reads the LMS and checks every record against the bureau rules.</span>
+        <em>System · a few minutes</em></div></li>
+      <li><a class="flow-step" href="tracker.html"><span class="flow-no">4</span><strong>Review findings</strong>
+        <span>See what will be reported, what will not, and why.</span>
+        <em>You · before generating</em></a></li>
+      <li><a class="flow-step" href="files.html"><span class="flow-no">5</span><strong>Generate files</strong>
+        <span>Pick the bureaus. One file per bureau, made from the validated data.</span>
+        <em>You + system · a minute</em></a></li>
+      <li><div class="flow-step outside"><span class="flow-no">6</span><strong>Upload to the bureaus</strong>
+        <span>Download each file and upload it to that bureau as agreed with them.</span>
+        <em>You · outside this app</em></div></li>
+    </ol>
+    <p class="flow-loop"><span aria-hidden="true">↺</span> <strong>Something to fix after step 4?</strong> Correct it in the
+      LMS or add an exception, then raise a <a href="new.html">new request</a>. A validated request is never edited,
+      so every file always matches what was checked.</p>
+  </div>
+
+  <!-- ===================== steps in detail -->
+  <div class="panel">
+    <h2>Each step in detail</h2>
+    <div class="howto-steps">
+      <section>
+        <h3><span class="flow-no">1</span> New request</h3>
+        <ul>
+          <li><strong>As-of date</strong>: the date the data is reported for, usually the last day of the month.</li>
+          <li><strong>Reporting cycle</strong>: ME (month end), W1, W2 or W3 (weekly), or ad hoc.</li>
+          <li><strong>Types</strong>: Consumer, Commercial or both. Each is validated separately.</li>
+        </ul>
+        <p class="hint">The request starts as a draft, so you can add exceptions before anything runs.</p>
+      </section>
+      <section>
+        <h3><span class="flow-no">2</span> Exceptions (optional)</h3>
+        <ul>
+          <li><strong>Exclude</strong> a loan (by loan number) or a customer (all their loans).</li>
+          <li><strong>Override</strong> days past due, balance, amount overdue or settlement amount.</li>
+          <li>Every exception needs a reason; they are kept for audit.</li>
+        </ul>
+        <p class="hint">Exceptions are locked once the request is submitted for validation.</p>
+      </section>
+      <section>
+        <h3><span class="flow-no">3</span> Validate</h3>
+        <ul>
+          <li>Click <strong>Submit for validation</strong> on the request.</li>
+          <li>The system copies the data from the LMS and runs the bureau checks. The request shows
+            <span class="badge s-IN_PROGRESS">In progress</span> until it is done.</li>
+        </ul>
+      </section>
+      <section>
+        <h3><span class="flow-no">4</span> Review findings</h3>
+        <ul>
+          <li>Open the request: four numbers show records checked, will be reported, not reported and reported with gaps.</li>
+          <li>Open a category to see its issues, then <strong>View</strong> for the loans or borrowers concerned.</li>
+          <li><strong>Download CSV</strong> gives every finding, to share with the operations team.</li>
+        </ul>
+      </section>
+      <section>
+        <h3><span class="flow-no">5</span> Generate files</h3>
+        <ul>
+          <li>On the validated request, choose the bureaus and click <strong>Generate files</strong>.</li>
+          <li>Records that were not reported are left out; the exceptions file lists them.</li>
+          <li>Files are never overwritten: each generation is a new file, kept for audit.</li>
+        </ul>
+      </section>
+      <section>
+        <h3><span class="flow-no">6</span> Upload to the bureaus</h3>
+        <ul>
+          <li>Download each file from the request or from <a href="files.html">Files</a>.</li>
+          <li>Upload it to the bureau it was made for (the bureau's name is in the file name and on the Files page).</li>
+        </ul>
+        <p class="hint">This step happens outside this app.</p>
+      </section>
+    </div>
+  </div>
+
+  <div class="grid two">
+    <!-- ===================== stages -->
+    <div class="panel">
+      <h2>Where is my request?</h2>
+      <p class="muted">The dashboard counts requests by stage. What each stage means and what to do next:</p>
+      <table class="howto-table">
+        <tbody>
+          <tr><td><span class="badge s-AWAITING_EXCEPTIONS">Awaiting exceptions</span></td>
+            <td>Draft. Add exceptions if needed, then submit it for validation.</td></tr>
+          <tr><td><span class="badge s-IN_PROGRESS">In progress</span></td>
+            <td>Validation or file generation is running. Wait a few minutes.</td></tr>
+          <tr><td><span class="badge s-VALIDATED">Validated, files pending</span></td>
+            <td>Review the findings, then generate the files.</td></tr>
+          <tr><td><span class="badge s-COMPLETED">Completed</span></td>
+            <td>Files are ready. Download them and upload them to the bureaus.</td></tr>
+          <tr><td><span class="badge s-FAILED">Failed</span></td>
+            <td>Open the request and read the error. Retry it, or raise a new request.</td></tr>
+          <tr><td><span class="badge s-CANCELLED">Cancelled</span></td>
+            <td>Discarded or cancelled. Nothing more to do.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===================== findings -->
+    <div class="panel">
+      <h2>Reading the findings</h2>
+      <p class="muted">Every record gets one of these results. A record is one loan and one borrower (Consumer: account ×
+        holder; Commercial: credit facility × borrower).</p>
+      <div class="outcomes">
+        <div class="outcome bad"><strong>Not reported</strong><span>The record breaks a rule the bureau requires, so it is
+          left out of the file.</span><em>Fix it in the LMS, or exclude it with a reason.</em></div>
+        <div class="outcome warn"><strong>Reported with gaps</strong><span>The record is reported, but a value or a section
+          (for example an invalid phone number) is left out.</span><em>Fix it in the LMS when you can.</em></div>
+        <div class="outcome info"><strong>Warning only</strong><span>Reported as it is. Worth a look, nothing is left
+          out.</span><em>No action needed for this submission.</em></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== glossary -->
+  <div class="panel">
+    <h2>Words used in the app</h2>
+    <dl class="glossary">
+      <dt>Request</dt><dd>One validation of your data for an as-of date, and the files generated from it.</dd>
+      <dt>As-of date</dt><dd>The date the reported data refers to (balances, days past due ...).</dd>
+      <dt>Reporting cycle</dt><dd>ME month end, W1 / W2 / W3 weekly submissions, or ad hoc.</dd>
+      <dt>Exception</dt><dd>Your instruction for one request: leave a loan or customer out, or correct a value.</dd>
+      <dt>Validation</dt><dd>The check of every record against the bureau rules, before any file is made.</dd>
+      <dt>Finding</dt><dd>One issue found in one record, with its effect on the file.</dd>
+      <dt>Bureau file</dt><dd>The file for one bureau (CIBIL, Experian, Equifax, CRIF High Mark), in its required format.</dd>
+      <dt>Consumer / Commercial</dt><dd>Loans to individuals / credit facilities of businesses: separate files and rules.</dd>
+    </dl>
+  </div>
+
+  <!-- ===================== administrators -->
+  <details class="panel howto-admin">
+    <summary><h2>For administrators</h2></summary>
+    <ul>
+      <li><a href="rules.html">Rules &amp; policies</a> lists every check. An administrator can switch a check off or
+        change its effect (for example from "Not reported" to "Warning only") for this NBFC, with a reason.</li>
+      <li>Rule parameters (dates, minimum lengths, ID patterns) can be changed on the same page.</li>
+      <li>Custom checks specific to this NBFC can be added there and previewed on the latest validation.</li>
+      <li>Every change is recorded in <a href="audit.html">Audit</a> and applies to requests validated afterwards.</li>
+      <li>A request that keeps failing with a technical error: contact your support team with the request number.</li>
+    </ul>
+  </details>
+</main>
+</body>
+</html>

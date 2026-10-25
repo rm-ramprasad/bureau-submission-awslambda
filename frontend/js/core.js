@@ -183,12 +183,14 @@ const ICONS = {
   audit: '<path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   admin: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
   pulse: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
 };
 const icon = (name) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
 const NAV = [
-  ["Main"], ["dashboard", "index.html", "Dashboard", "dashboard"], ["new", "new.html", "New request", "new"],
+  ["Main"], ["howto", "howto.html", "How to", "help"], ["dashboard", "index.html", "Dashboard", "dashboard"],
+  ["new", "new.html", "New request", "new"],
   ["exceptions", "exceptions.html", "Exceptions", "exceptions"],
   ["Reports"], ["tracker", "tracker.html", "Submission tracker", "tracker"], ["files", "files.html", "Files", "files"],
   ["audit", "audit.html", "Audit", "audit"],
