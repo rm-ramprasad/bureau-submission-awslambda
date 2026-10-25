@@ -69,34 +69,23 @@
       <template x-for="s in b.snapshots" :key="s.snapshot.snapshot_id">
         <div class="panel flush">
           <div class="panel-head">
-            <h2>Snapshot #<span x-text="s.snapshot.snapshot_id"></span>
+            <h2 :title="'Snapshot #' + s.snapshot.snapshot_id"><span x-text="F.title(s.snapshot.submission_type)"></span> validation
               <span class="badge" :class="'b-' + s.snapshot.status" x-text="F.title(s.snapshot.status)"></span></h2>
-            <span><span class="badge b-ACCEPTED" x-text="(s.records.ACCEPTED || 0) + ' accepted'"></span>
-              <span class="badge b-REJECTED" x-text="(s.records.REJECTED || 0) + ' rejected'"></span></span>
           </div>
           <div class="panel-body" x-show="s.report.kpis.records">
             <div class="kpis small">
-              <div class="kpi"><span class="label">Records checked</span><span class="value" x-text="F.num(s.report.kpis.records)"></span>
-                <span class="hint">loan × borrower</span></div>
-              <div class="kpi k-COMPLETED"><span class="label">Will be reported</span><span class="value" x-text="F.num(s.report.kpis.reported)"></span>
-                <span class="hint" x-text="F.pct(s.report.kpis.reported / s.report.kpis.records) + ' of records'"></span></div>
-              <div class="kpi k-FAILED"><span class="label">Not reported</span><span class="value" x-text="F.num(s.report.kpis.not_reported)"></span>
-                <span class="hint">left out of the file</span></div>
-              <div class="kpi k-VALIDATED"><span class="label">Reported with gaps</span><span class="value" x-text="F.num(s.report.kpis.with_gaps)"></span>
-                <span class="hint">a section or value dropped</span></div>
+              <div class="kpi"><span class="label">Records checked</span><span class="value" x-text="F.num(s.report.kpis.records)"></span></div>
+              <div class="kpi k-COMPLETED"><span class="label">Will be reported</span><span class="value" x-text="F.num(s.report.kpis.reported)"></span></div>
+              <div class="kpi k-FAILED"><span class="label">Not reported</span><span class="value" x-text="F.num(s.report.kpis.not_reported)"></span></div>
+              <div class="kpi k-VALIDATED"><span class="label">Reported with gaps</span><span class="value" x-text="F.num(s.report.kpis.with_gaps)"></span></div>
             </div>
-            <p x-show="s.report.not_reported_by_category.length"><strong>Not reported, by reason:</strong>
-              <template x-for="(c, i) in s.report.not_reported_by_category" :key="c.key">
-                <span><span x-show="i"> · </span><a :href="`findings.html?snapshot=${s.snapshot.snapshot_id}&category=${c.key}`"
-                  x-text="`${c.label} ${c.records}`"></a></span>
-              </template></p>
           </div>
           <template x-for="c in s.report.categories" :key="c.key">
             <details class="category">
               <summary><strong x-text="c.label"></strong>
                 <span class="badge b-REJECTED" x-show="c.not_reported" x-text="`${c.not_reported} not reported`"></span>
                 <span class="badge b-WARN" x-show="c.with_gaps" x-text="`${c.with_gaps} with gaps`"></span>
-                <span class="muted" x-text="`${c.rules.length} issue type${c.rules.length > 1 ? 's' : ''}`"></span></summary>
+                <span class="muted" x-show="!c.not_reported && !c.with_gaps">warnings only</span></summary>
               <div class="table-wrap"><table>
                 <thead><tr><th>Issue</th><th>Effect</th><th class="num">Records</th><th></th></tr></thead>
                 <tbody>
@@ -116,8 +105,7 @@
               <span x-text="s.adjusted.overridden_accounts"></span> loan(s) overridden
               <span x-show="s.adjusted.not_found"> · <span class="badge b-WARN" x-text="s.adjusted.not_found + ' not found'"></span></span>
               <span x-show="s.snapshot.batch_id"> · <a :href="`exceptions.html?batch=${s.snapshot.batch_id}&type=${s.snapshot.submission_type}`">Exceptions</a></span></p>
-            <span class="muted" x-text="`Mapping ${s.snapshot.mapping_version} · canonical ${s.snapshot.canonical_version}`"></span>
-            <span x-show="s.report.categories.length"> ·<a :href="'findings.html?snapshot=' + s.snapshot.snapshot_id">All findings</a> ·
+            <span x-show="s.report.categories.length"><a :href="'findings.html?snapshot=' + s.snapshot.snapshot_id">All findings</a> ·
               <a href="#" @click.prevent="csv(s.snapshot.snapshot_id)">Download CSV</a></span>
             <p class="error-text" x-show="s.snapshot.error_message" x-text="s.snapshot.error_message"></p>
           </div>
