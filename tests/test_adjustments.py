@@ -206,6 +206,29 @@ def test_override_feeds_validation(worker, requests_repo, engine, adjustments):
     assert again.overridden_accounts == 1                              # one loan, two fields
 
 
+def test_commercial_exceptions_cover_every_commercial_entity(worker, requests_repo, engine, adjustments):
+    """Exceptions on a commercial request: facility rows (guarantors, securities, cheques) follow the facility,
+    relationships follow the borrower (regression: 'No adjustment rule for entity relationship')."""
+    from mock_data.commercial import rows as commercial_rows
+    src = commercial_rows(1)
+    fac = {f["test_scenario_number"]: f for f in src["business_facility"]}
+    cc, owner_loan = fac[1], fac[2]                       # cash credit with 2 securities; proprietor + guarantor
+    batch = requests_repo.create_batch("nbfc_001", AS_OF, M.VALIDATE, [T.COMMERCIAL], draft=True)
+    scope = AdjustmentScope.of(requests_repo.list_batch(batch)[0])
+    adjustments.add_exclusions(scope, K.EXCLUDE_ACCOUNT, [cc["facility_number"]], "disputed", "u")
+    adjustments.add_exclusions(scope, K.EXCLUDE_CUSTOMER, [owner_loan["customer_id"]], None, "u")
+    adjustments.add_override(scope, fac[3]["facility_number"], F.DAYS_PAST_DUE, Decimal(15), "late", "u")
+    row = submit(worker, requests_repo, scope)
+    snap = row.snapshot_id
+    assert rows(engine, "account", snap, account_key=cc["facility_id"]) == []
+    assert rows(engine, "security", snap, account_key=cc["facility_id"]) == []          # follows the facility
+    assert rows(engine, "guarantor", snap, account_key=owner_loan["facility_id"]) == []
+    assert rows(engine, "relationship", snap, party_key=owner_loan["customer_id"]) == []  # follows the borrower
+    assert rows(engine, "security", snap) and rows(engine, "relationship", snap)       # others untouched
+    (overridden,) = rows(engine, "account", snap, account_key=fac[3]["facility_id"])
+    assert overridden.days_past_due == 15 and row.excluded_accounts == 2 and row.overridden_accounts == 1
+
+
 def test_unmatched_adjustments_are_reported(worker, requests_repo, engine, adjustments):
     scope = draft(requests_repo)
     adjustments.add_exclusions(scope, K.EXCLUDE_ACCOUNT, ["NO-SUCH-LOAN"], None, "u")

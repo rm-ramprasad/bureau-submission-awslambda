@@ -12,6 +12,7 @@ The c_* tables then hold the final data; validation and the formatter read them 
 
 from __future__ import annotations
 
+from submissions.canonical.definition import canonical_model
 from submissions.enums import OverrideField
 
 _FREEZE = """INSERT INTO snapshot_adjustment
@@ -83,13 +84,14 @@ def final_select(entity: str, sql: str, columns: list[str]) -> str:
         f"COALESCE((SELECT o.new_value FROM snapshot_adjustment_effect o WHERE o.snapshot_id = :snapshot_id "
         f"AND o.action = 'OVERRIDE' AND o.field = '{c}' AND o.account_key = q.account_key), q.{c}) AS {c}"
         if c in overrides else f"q.{c}" for c in columns)
-    if entity.startswith("account"):                     # account, account_holder, account_history
-        where = f"NOT {_excluded('EXCLUDE', 'q.account_key')}"
-    elif entity.startswith("party"):                     # party and its identifiers, phones, e-mails, addresses
-        where = f"NOT {_excluded('EXCLUDE_PARTY', 'q.party_key')}"
+    edef = canonical_model().entities[entity]
+    if edef.account_key:                                 # rows of a loan: account, holders, history, guarantors ...
+        where = f"NOT {_excluded('EXCLUDE', 'q.' + edef.account_key)}"
+    elif edef.party_key:                                 # rows of a borrower: party, identifiers ..., relationships
+        where = f"NOT {_excluded('EXCLUDE_PARTY', 'q.' + edef.party_key)}"
     elif entity == "extension_attribute":
         where = (f"NOT ((q.entity = 'account' AND {_excluded('EXCLUDE', 'q.entity_key')}) "
                  f"OR (q.entity = 'party' AND {_excluded('EXCLUDE_PARTY', 'q.entity_key')}))")
     else:
-        raise ValueError(f"No adjustment rule for entity {entity!r}")
+        raise ValueError(f"No adjustment rule for entity {entity!r}: give it keys in canonical/model.yaml")
     return f"SELECT {cols}\nFROM (\n{_strip(sql)}\n) q\nWHERE {where}"
